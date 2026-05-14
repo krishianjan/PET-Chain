@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "selectors": {
+    "chatgpt.com": {
+      "prompt_textarea": "#prompt-textarea",
+      "send_button": "[data-testid='send-button']",
+      "response_container": "main",
+      "last_response": "div.markdown.prose:last-child"
+    },
+    "claude.ai": {
+      "prompt_textarea": "div[contenteditable='true']",
+      "send_button": "button[aria-label='Send Message']",
+      "response_container": "div.flex-1.overflow-y-auto",
+      "last_response": "div.font-claude-message:last-child"
+    }
+  }
+}

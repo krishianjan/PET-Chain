@@ -1,0 +1,59 @@
+name: Deploy Website & Package Extension
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  deploy-site:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Upload website folder
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  release-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install & Build
+        run: npm ci && npm run build
+      - name: Zip dist
+        run: cd dist && zip -r ../pet-extension.zip . && cd ..
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v4.0
+          name: PET v4.0 — Prompt Enhancement Tool
+          body: |
+            ## Install in 60 seconds (no Chrome Store needed)
+            1. Download `pet-extension.zip` below
+            2. Unzip it → you'll get a `dist/` folder
+            3. Open `chrome://extensions` → enable **Developer Mode**
+            4. Click **Load unpacked** → select the `dist/` folder
+            5. Your pet appears! 🐾
+
+            Works on ChatGPT · Claude · Gemini · DeepSeek
+          files: pet-extension.zip
+          draft: false
+          prerelease: false

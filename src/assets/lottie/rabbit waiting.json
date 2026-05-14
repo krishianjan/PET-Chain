@@ -1,0 +1,6 @@
+{
+  "id": "pebbit",
+  "displayName": "Pebbit",
+  "description": "A small pebble-rabbit hybrid that stays steady through large diffs.",
+  "spritesheetPath": "spritesheet.webp"
+}

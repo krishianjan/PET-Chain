@@ -1,0 +1,534 @@
+import { useState, useRef, useEffect } from 'react'
+import { setQ, getQ, rewrite, evaluate } from '../../engines/api'
+import lottie from 'lottie-web'
+import { recordRewrite, recordScore, recordInject } from '../../engines/metrics_store'
+import selectorsConfig from '../../../selectors.config.json'
+
+export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petType, keys, setKeys, nextStep, clearNext, onPetSelect }) {
+  const [view,      setView]      = useState('main')
+  const [rewrites,  setRewrites]  = useState([])
+  const [score,     setScore]     = useState(null)
+  const [loading,   setLoading]   = useState(false)
+  const [status,    setStatus]    = useState('Ready')
+  const [copied,    setCopied]    = useState(null)   // id of card just copied
+  const [editing,   setEditing]   = useState(null)   // id of card being refined
+  const [editTexts, setEditTexts] = useState({})     // id → edited prompt text
+
+  const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
+  const sizeRef   = useRef({ w: 340, h: 520 })
+  const [pos, setPos] = useState(posRef.current)
+  const [sz,  setSz]  = useState(sizeRef.current)
+  const dragging  = useRef(false), resizing = useRef(false)
+  const doff      = useRef({ x:0, y:0 })
+  const rstart    = useRef({ x:0, y:0, w:0, h:0 })
+
+  // Stores the user's ORIGINAL raw question — never overwritten by injected prompt
+  const originalQ = useRef('')
+
+  const apiKey = keys.groq || keys.openai || keys.deepseek
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function getPrompt() {
+    const sel = selectorsConfig.platforms[platform]?.textarea
+    if (!sel) return ''
+    const el = document.querySelector(sel)
+    if (!el) return ''
+    return (el.value || el.textContent || el.innerText || '').trim()
+  }
+
+  function inject(text) {
+    const sel = selectorsConfig.platforms[platform]?.textarea
+    if (!sel) return
+    const el = document.querySelector(sel)
+    if (!el) { setStatus('Could not find textarea on this page'); return }
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(el, text)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    } else {
+      el.focus()
+      document.execCommand('selectAll', false, null)
+      document.execCommand('insertText', false, text)
+    }
+    petCtrl?.setState('happy')
+    setStatus('✓ Injected into textarea')
+    setEditing(null)
+    el.focus?.()
+    try { recordInject() } catch { /* metrics never block UX */ }
+  }
+
+  function copyToClipboard(id, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(id)
+      setTimeout(() => setCopied(null), 1800)
+    }).catch(() => {
+      // Fallback for restricted contexts
+      const ta = document.createElement('textarea')
+      ta.value = text; document.body.appendChild(ta); ta.select()
+      document.execCommand('copy'); document.body.removeChild(ta)
+      setCopied(id); setTimeout(() => setCopied(null), 1800)
+    })
+  }
+
+  function startRefine(r) {
+    setEditTexts(prev => ({ ...prev, [r.id]: prev[r.id] ?? r.prompt }))
+    setEditing(r.id)
+  }
+
+  // ── Domain detection (mirrors worker.js detectDomain) ────────────────────
+  function detectDomain(q) {
+    const t = q.toLowerCase()
+    if (/\b(stock|invest|market|finance|money|crypto|bitcoin|return|profit|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound|asset)\b/.test(t)) return 'finance'
+    if (/\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|fails|undefined|null pointer)\b/.test(t)) return 'code_debug'
+    if (/\b(build|create|make|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm)\b/.test(t)) return 'code_build'
+    if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic)\b/.test(t)) return 'math'
+    if (/\b(science|biology|chemistry|physics|quantum|atom|molecule|cell|evolution|climate|astronomy|genetics|experiment|hypothesis)\b/.test(t)) return 'science'
+    if (/\b(health|diet|exercise|medical|disease|symptom|treatment|nutrition|fitness|mental|therapy|medicine|workout|calories|sleep)\b/.test(t)) return 'health'
+    if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|script|copy|caption|headline)\b/.test(t)) return 'writing'
+    if (/\b(learn|teach|explain|what is|how does|how do|understand|tutorial|concept|beginner|study|course)\b/.test(t)) return 'learn'
+    return 'general'
+  }
+
+  // ── Domain-aware follow-up prompt builder ─────────────────────────────────
+  function buildFollowUp(domain, gaps, score) {
+    const g0 = gaps[0] || ''
+    const gapPhrase = gaps.slice(0, 2).map(w => `"${w}"`).join(' and ')
+
+    if (score >= 78) {
+      const deepeners = {
+        finance:    `The explanation covered the basics well. Push it further: "Walk me through a complete real decision using what you just explained. Pick one specific asset available in today's market, apply each concept with actual current prices, show the full calculation, and give a concrete buy/hold/sell recommendation with a specific dollar amount and timeline. Flag the biggest risk to this position."`,
+        code_debug: `The fix looks solid. Now harden it: "You identified the root cause — next: (1) write a unit test that would have caught this bug before production, (2) give me a grep pattern to find similar patterns elsewhere in the codebase, and (3) add the minimal type annotation or assertion that prevents this entire class of error at the function boundary."`,
+        code_build: `Architecture is clear. Now ship it: "Generate the complete, working code for the single most critical file you described. Include real error handling, one passing test, and the exact terminal commands to run it from a blank directory. No placeholders."`,
+        math:       `Solution verified — now build intuition: "Give me three variations of this exact problem where one variable changes each time. Show how the answer shifts and explain WHY the relationship behaves that way. Then give me a harder problem of the same type without solving it yet."`,
+        science:    `Good explanation. Now make it concrete: "Describe a specific real experiment or observation that directly proves the mechanism you explained. Walk through it step by step — what is measured, what is observed, why it confirms the theory, and what result would falsify it."`,
+        health:     `Solid overview. Now personalise it: "Walk me through how this applies to someone who is 30 years old, moderately active, with no pre-existing conditions. Give specific numbers — target ranges, optimal timings, measurable outcomes — not general advice."`,
+        learn:      `Good explanation. Now test my understanding: "Ask me three progressively harder questions — easy, medium, hard — about what you explained. After each answer from me, tell me exactly what a correct answer looks like and what misconception my answer reveals. Don't give me the answers yet."`,
+        writing:    `Strong draft. Now sharpen it: "Apply three specific edits to what you wrote: (1) rewrite the opening sentence so it creates immediate tension or curiosity, (2) replace the three most generic adjectives with precise, specific ones, (3) cut every sentence over 25 words in half. Show before and after for each change."`,
+        general:    `Good answer. Now push the edge: "Give me a specific real-world scenario where this analysis breaks down or produces the opposite result. Use actual names and numbers. Then tell me what an expert who has seen that failure would do differently."`,
+      }
+      return deepeners[domain] || deepeners.general
+    }
+
+    if (gaps.length) {
+      const fillers = {
+        finance:    `The response left gaps on ${gapPhrase}. Follow up precisely: "Your answer was incomplete on ${g0}. Please add: (1) the exact formula with every variable labelled, (2) a worked example using real 2024 data — actual tickers and prices — and (3) the most common situation where this metric gives a false signal and why."`,
+        code_debug: `Missing detail on ${gapPhrase}. Dig deeper: "The diagnosis skipped ${g0}. Show me the exact execution path that triggers the failure — trace it line by line through the call stack. Then confirm the fix by showing the specific input that previously caused the crash and the output after your change."`,
+        code_build: `Implementation skipped ${gapPhrase}. Fill the gap: "The design is missing ${g0}. Write the complete code for that part — full function signature, real error handling, edge cases handled, and one working test. No placeholders."`,
+        math:       `The solution skipped steps around ${gapPhrase}. Request: "The working jumped over the ${g0} step. Show that part in full — write every algebraic manipulation as a numbered line and explain the rule applied at each transformation."`,
+        science:    `Incomplete on ${gapPhrase}. Ask: "You skipped ${g0}. Explain it precisely: what is the mechanism, what evidence supports it, and what experiment would falsify it?"`,
+        health:     `Didn't address ${gapPhrase}. Ask: "You left out ${g0}. Give me specific, evidence-based guidance: recommended ranges, how to measure it, and what deviation from normal looks like in practice."`,
+        learn:      `Didn't explain ${gapPhrase} adequately. Request: "You mentioned ${g0} but didn't explain it. Give me: (1) a plain-English definition with a real-world analogy, (2) a concrete example with specific names or numbers, and (3) how it connects to what you explained just before it."`,
+        writing:    `Response missed ${gapPhrase}. Improve it: "The piece is missing ${g0}. Rewrite the section where it should appear and show me before and after side by side so I can see exactly what changed and why it is stronger."`,
+        general:    `The response didn't fully cover ${gapPhrase}. Follow up: "You skipped ${g0} entirely. Please explain it with: a clear one-sentence definition, a concrete real example using specific numbers or names, and the single most common mistake people make when dealing with it."`,
+      }
+      return fillers[domain] || fillers.general
+    }
+
+    const generic = {
+      finance:    `Go further: "Apply what you explained to a real portfolio. Use $50,000, select 4 specific ETFs or stocks trading today, show exact allocation percentages and projected returns over 3 and 5 years, and identify the single biggest risk to this portfolio right now."`,
+      code_debug: `Go further: "Show the fully fixed version of the code with all your changes applied, add a test that passes only when the bug is truly fixed, and name one related bug that frequently appears alongside this type of error."`,
+      code_build: `Go further: "Build the first working feature — complete code, zero placeholders. Include the commands to run it from scratch and the exact output that proves it works end-to-end."`,
+      math:       `Go further: "Give me a harder version of this problem where the answer is not immediately obvious, work through it fully, then explain what makes this problem type conceptually tricky for most students."`,
+      learn:      `Go further: "Teach me the next level up — assume I completely understood your explanation. What is the adjacent concept I need to learn next, and how does it connect to what you just taught?"`,
+      writing:    `Go further: "Identify the weakest paragraph in your draft. Rewrite it so the first sentence hooks the reader, every claim is backed by a specific detail, and the paragraph ends with a memorable line."`,
+      general:    `Go further: "Give me a specific, concrete example that makes this immediately practical — use real names, real numbers, and a scenario I might actually face in the next 30 days."`,
+    }
+    return generic[domain] || generic.general
+  }
+
+  // ── Smart local scorer ────────────────────────────────────────────────────
+  function smartLocalScore(originalQuestion, responseText) {
+    const STOP = new Set(['want','know','about','that','this','with','from','have','will','what','when','where','which','your','their','some','also','into','more','very','just','like','than','then','them','they','been','were','does','make','find','tell','give','show','need','help','please','could','would','should','explain','describe'])
+    const domain  = detectDomain(originalQuestion)
+    const qWords  = originalQuestion.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP.has(w))
+    const rt      = responseText.toLowerCase()
+
+    const hitWords  = qWords.filter(w => rt.includes(w))
+    const missWords = qWords.filter(w => !rt.includes(w)).slice(0, 4)
+    const hitRate   = hitWords.length / Math.max(qWords.length, 1)
+
+    const wordCount  = responseText.split(/\s+/).length
+    const hasNums    = /\d+[.,]?\d*/.test(responseText)
+    const hasLists   = /^[\-\*•]|\n\d+\./m.test(responseText)
+    const hasHeaders = /\n#{1,3}\s|\n[A-Z][A-Z\s]{3,}:\n/.test(responseText)
+    const hasExamples= /\b(example|instance|such as|e\.g\.|for instance|consider)\b/i.test(responseText)
+
+    let sc = Math.round(hitRate * 55) + 15
+    if (wordCount > 400) sc += 12
+    else if (wordCount > 200) sc += 7
+    else if (wordCount > 80)  sc += 3
+    if (hasNums)     sc += 7
+    if (hasLists)    sc += 6
+    if (hasHeaders)  sc += 5
+    if (hasExamples) sc += 5
+
+    // Domain-specific quality signals
+    if (domain === 'finance') {
+      if (/\d+[%％]/.test(responseText)) sc += 6
+      if (/\$\d|USD|\bROI\b|\bCAGR\b|\bP\/E\b/.test(responseText)) sc += 5
+      if (/\b(risk|downside|diversif|volatility)\b/i.test(responseText)) sc += 4
+    } else if (domain === 'code_debug' || domain === 'code_build') {
+      if (/```[\s\S]*?```/.test(responseText)) sc += 8
+      if (/\b(function|class|import|const|def |return)\b/.test(responseText)) sc += 4
+      if (/\b(test|assert|expect|verify)\b/i.test(responseText)) sc += 3
+    } else if (domain === 'math') {
+      if (/[=≈∫∑√±]/u.test(responseText)) sc += 6
+      if (/step\s+\d|^\d+\.\s/im.test(responseText)) sc += 5
+      if (/therefore|hence|thus/i.test(responseText)) sc += 3
+    } else if (domain === 'learn') {
+      if (/\b(analogy|think of|imagine|like a)\b/i.test(responseText)) sc += 5
+      if (/\b(common mistake|avoid|careful)\b/i.test(responseText)) sc += 4
+    }
+
+    sc = Math.max(20, Math.min(96, sc))
+
+    const grade       = sc >= 85 ? 'A' : sc >= 70 ? 'B' : sc >= 55 ? 'C' : 'D'
+    const grade_label = sc >= 85 ? 'Excellent ✦' : sc >= 70 ? 'Good ✓' : sc >= 55 ? 'Partial ~' : 'Weak ✗'
+
+    const covered = hitWords.slice(0, 3).map(w => `"${w}" addressed`)
+    if (covered.length === 0) covered.push('Response was provided')
+    const missing = missWords.map(w => `"${w}" needs more depth`)
+
+    const next_prompt = buildFollowUp(domain, missWords, sc)
+
+    return { score: sc, grade, grade_label, covered, missing, next_prompt }
+  }
+
+  // ── Shared rewrite core ───────────────────────────────────────────────────
+  async function runRewrite(raw) {
+    originalQ.current = raw
+    setQ(raw)
+    setLoading(true)
+    setRewrites([])
+    setScore(null)
+    setEditing(null)
+    petCtrl?.setState('thinking')
+    setStatus('Crafting prompts…')
+
+    let result = null
+    try { result = await rewrite(raw, apiKey) } catch (e) { console.error('[PET rewrite]', e) }
+
+    if (!result?.rewrites?.length) {
+      setStatus('Could not generate prompts — try again')
+      petCtrl?.setState('error')
+      setLoading(false)
+      return
+    }
+    setRewrites(result.rewrites)
+    setStatus(result.source === 'instant' ? `✓ ${result.rewrites.length} local prompts ready` : `✓ ${result.rewrites.length} AI prompts ready`)
+    petCtrl?.setState('happy')
+    setLoading(false)
+    try {
+      const fp = result.rewrites[0]
+      const origW = raw.split(/\s+/).length
+      const rewriteW = fp?.prompt?.split(/\s+/).length || 0
+      await recordRewrite({ tokensSaved: Math.max(0, rewriteW - origW) * 2, technique: fp?.technique || 'Expert', taskType: fp?.label || 'general' })
+    } catch { /* metrics never block UX */ }
+  }
+
+  // ── Rewrite from textarea ──────────────────────────────────────────────────
+  async function handleRewrite() {
+    const raw = getPrompt()
+    if (!raw) { setStatus('Type something in the chat textarea, then click Rewrite'); return }
+    await runRewrite(raw)
+  }
+
+  // ── Rewrite a specific card's prompt (generate new variations of it) ───────
+  async function handleRewriteCard(promptText) {
+    await runRewrite(promptText)
+  }
+
+  // ── Score ─────────────────────────────────────────────────────────────────
+  async function handleScore() {
+    const sel     = selectorsConfig.platforms[platform]?.response
+    const els     = sel ? document.querySelectorAll(sel) : []
+    const resEl   = els.length ? els[els.length - 1] : null
+    const resText = resEl?.textContent?.trim() || ''
+
+    if (!resText) {
+      setStatus('No LLM response visible yet — send a prompt first')
+      return
+    }
+
+    petCtrl?.setState('analyzing')
+    setLoading(true)
+    setScore(null)
+    setStatus('Evaluating response…')
+
+    // Use the ORIGINAL question (before injection) — never the rewritten/injected text
+    const origQuestion = originalQ.current || getQ()
+
+    let result = null
+    try {
+      // If origQuestion is set, pass it directly so worker uses it (not the injected prompt)
+      result = await evaluate(resText, apiKey)
+    } catch (e) {
+      console.error('[PET handleScore]', e)
+    }
+
+    // Always run smart local scorer to validate/override if score seems wrong
+    const localResult = smartLocalScore(origQuestion || resText.slice(0, 200), resText)
+
+    // Use backend result if it has a valid score, otherwise use local
+    const final = (result?.score != null && origQuestion)
+      ? { ...result, next_prompt: result.next_prompt || localResult.next_prompt }
+      : localResult
+
+    setScore(final)
+    petCtrl?.setState(final.score >= 75 ? 'celebrating' : final.score >= 50 ? 'happy' : 'error')
+    setStatus(`${final.score}% · Grade ${final.grade}`)
+    setLoading(false)
+    try { await recordScore(final.score) } catch { /* metrics never block UX */ }
+  }
+
+  // ── Drag handlers via useEffect (mouse events on window) ──────────────────
+  // Using inline onMouseMove on window would cause re-renders; attach once
+  if (typeof window !== 'undefined' && !window.__petDragAttached) {
+    window.__petDragAttached = true
+    window.addEventListener('mousemove', (e) => {
+      if (dragging.current) {
+        const np = { x: Math.max(0, Math.min(window.innerWidth - sizeRef.current.w - 8, e.clientX - doff.current.x)), y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - doff.current.y)) }
+        posRef.current = np
+      }
+      if (resizing.current) {
+        const ns = { w: Math.max(300, Math.min(680, rstart.current.w + e.clientX - rstart.current.x)), h: Math.max(360, Math.min(window.innerHeight - 20, rstart.current.h + e.clientY - rstart.current.y)) }
+        sizeRef.current = ns
+      }
+    })
+    window.addEventListener('mouseup', () => { dragging.current = false; resizing.current = false })
+  }
+
+  // ── Sidebar logo animation ────────────────────────────────────────────────
+  function LogoAnim() {
+    const ref = useRef(null)
+    useEffect(() => {
+      if (!ref.current) return
+      const url = typeof chrome !== 'undefined'
+        ? chrome.runtime.getURL('assets/lottie/loadinganimation.json')
+        : 'loadinganimation.json'
+      let inst = null
+      fetch(url).then(r => r.json()).then(data => {
+        if (!ref.current) return
+        inst = lottie.loadAnimation({ container: ref.current, animationData: data, renderer: 'svg', loop: true, autoplay: true })
+      }).catch(() => {})
+      return () => inst?.destroy()
+    }, [])
+    return <div ref={ref} style={{ width: 28, height: 28, flexShrink: 0 }} />
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={{
+      position: 'fixed', left: pos.x, top: pos.y, width: sz.w, height: sz.h,
+      zIndex: 2147483646, pointerEvents: 'auto',
+      background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(83,74,183,.18)', borderRadius: 18,
+      boxShadow: '0 8px 40px rgba(83,74,183,.14)',
+      fontFamily: 'system-ui,-apple-system,sans-serif',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div
+        onMouseDown={e => { dragging.current = true; doff.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y }; e.preventDefault() }}
+        style={{ padding: '10px 12px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'move', background: '#f8f8ff', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <LogoAnim />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#534ab7' }}>PET</div>
+            <div style={{ fontSize: 10, color: '#9ca3af' }}>{loading ? '…' : status}</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {!apiKey && <button onClick={() => setView(v => v === 'setup' ? 'main' : 'setup')} style={{ fontSize: 9, padding: '3px 7px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 5, cursor: 'pointer' }}>+ Key</button>}
+          <button onClick={onMinimize} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af' }}>─</button>
+          <button onClick={onClose}    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af' }}>✕</button>
+        </div>
+      </div>
+
+      {/* Body */}
+      {view === 'setup' ? (
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: '#166534', background: '#f0fdf4', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+            Free Groq API key at <b>console.groq.com</b>
+          </div>
+          <input
+            type="password"
+            placeholder="Paste Groq Key (gsk_…) then press Enter"
+            style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 6, fontSize: 11, boxSizing: 'border-box' }}
+            onKeyDown={async e => {
+              if (e.key === 'Enter' && e.target.value.trim()) {
+                await chrome.runtime.sendMessage({ type: 'SET_KEY', provider: 'groq', key: e.target.value.trim() })
+                setKeys(k => ({ ...k, groq: e.target.value.trim() }))
+                setView('main')
+                setStatus('API key saved!')
+              }
+            }}
+          />
+          <button onClick={() => setView('main')} style={{ marginTop: 8, width: '100%', padding: 6, background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
+            Use local mode (no key needed)
+          </button>
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleRewrite}
+              disabled={loading}
+              style={{ flex: 1, padding: 10, background: loading ? '#a5b4fc' : '#534ab7', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, cursor: loading ? 'wait' : 'pointer', fontSize: 12 }}
+            >
+              {loading ? '…' : '▶ Rewrite'}
+            </button>
+            <button
+              onClick={handleScore}
+              disabled={loading}
+              style={{ flex: 1, padding: 10, background: loading ? '#7dd3fc' : '#0891b2', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, cursor: loading ? 'wait' : 'pointer', fontSize: 12 }}
+            >
+              {loading ? '…' : '◎ Score'}
+            </button>
+          </div>
+
+          {/* No key notice */}
+          {!apiKey && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 8, fontSize: 10, color: '#92400e' }}>
+              ⚠ No API key — using offline mode (3 local prompts). <span onClick={() => setView('setup')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>Add Groq key</span> for AI-powered prompts.
+            </div>
+          )}
+
+          {/* Rewrite Cards */}
+          {rewrites.map((r, idx) => {
+            const isEditing = editing === r.id
+            const promptText = editTexts[r.id] ?? r.prompt
+            return (
+              <div key={r.id} style={{ background: '#fff', border: `1px solid ${r.recommended ? '#c4b5fd' : '#e5e7eb'}`, borderRadius: 12, padding: 10, position: 'relative' }}>
+                {/* Card header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#534ab7' }}>{r.label}</span>
+                    {r.recommended && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0f0ff', color: '#534ab7', borderRadius: 99, padding: '1px 5px', border: '1px solid #c4b5fd' }}>Recommended</span>}
+                    {r.technique && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0fdf4', color: '#166534', borderRadius: 99, padding: '1px 5px', border: '1px solid #bbf7d0' }}>{r.technique}</span>}
+                  </div>
+                  <span style={{ fontSize: 9, color: '#9ca3af' }}>#{idx + 1}</span>
+                </div>
+                {r.why && <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5, fontStyle: 'italic' }}>{r.why}</div>}
+
+                {/* Prompt preview OR edit textarea */}
+                {isEditing ? (
+                  <textarea
+                    value={promptText}
+                    onChange={e => setEditTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                    style={{ width: '100%', height: 180, fontSize: 10, fontFamily: 'monospace', border: '1px solid #c4b5fd', borderRadius: 6, padding: 6, resize: 'vertical', boxSizing: 'border-box', color: '#374151', lineHeight: 1.5 }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 10, color: '#374151', lineHeight: 1.5, maxHeight: 90, overflow: 'hidden', position: 'relative' }}>
+                    {promptText.slice(0, 280)}{promptText.length > 280 ? '…' : ''}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 5, marginTop: 7 }}>
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={() => inject(promptText)}
+                        style={{ flex: 2, padding: '5px 0', background: '#534ab7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
+                      >↗ Inject Refined</button>
+                      <button
+                        onClick={() => setEditing(null)}
+                        style={{ flex: 1, padding: '5px 0', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer', fontSize: 10 }}
+                      >← Back</button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => inject(r.prompt)}
+                        style={{ flex: 2, padding: '5px 0', background: '#f0f0ff', color: '#534ab7', border: '1px solid #c4b5fd', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
+                      >↗ Use</button>
+                      <button
+                        onClick={() => handleRewriteCard(r.prompt)}
+                        title="Generate new variations of this prompt"
+                        disabled={loading}
+                        style={{ flex: 1, padding: '5px 0', background: loading ? '#f3f4f6' : '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 6, cursor: loading ? 'wait' : 'pointer', fontSize: 10, fontWeight: 600 }}
+                      >↺ Vary</button>
+                      <button
+                        onClick={() => startRefine(r)}
+                        title="Edit before injecting"
+                        style={{ padding: '5px 7px', background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer', fontSize: 10 }}
+                      >✏</button>
+                      <button
+                        onClick={() => copyToClipboard(r.id, r.prompt)}
+                        title="Copy to clipboard"
+                        style={{ padding: '5px 8px', background: copied === r.id ? '#f0fdf4' : '#f9fafb', color: copied === r.id ? '#16a34a' : '#6b7280', border: `1px solid ${copied === r.id ? '#bbf7d0' : '#e5e7eb'}`, borderRadius: 6, cursor: 'pointer', fontSize: 10 }}
+                      >{copied === r.id ? '✓' : '⎘'}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Score Card */}
+          {score && (
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: score.score >= 75 ? '#16a34a' : score.score >= 55 ? '#d97706' : '#dc2626' }}>
+                  {score.score}%
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#374151' }}>Grade {score.grade}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280' }}>{score.grade_label}</div>
+                </div>
+              </div>
+
+              {/* Score bar */}
+              <div style={{ height: 6, background: '#e5e7eb', borderRadius: 3, marginBottom: 10, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${score.score}%`, background: score.score >= 75 ? '#16a34a' : score.score >= 55 ? '#f59e0b' : '#ef4444', borderRadius: 3, transition: 'width 0.5s ease' }} />
+              </div>
+
+              {score.covered?.length > 0 && (
+                <div style={{ marginBottom: 7 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', marginBottom: 3 }}>✓ Covered well</div>
+                  {score.covered.map((c, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {c}</div>)}
+                </div>
+              )}
+
+              {score.missing?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 3 }}>✗ Gaps found</div>
+                  {score.missing.map((m, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {m}</div>)}
+                </div>
+              )}
+
+              {score.next_prompt && (
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: 9 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>→ Suggested Next Prompt</div>
+                  <div style={{ fontSize: 10, color: '#374151', lineHeight: 1.55, marginBottom: 6 }}>{score.next_prompt}</div>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <button
+                      onClick={() => inject(score.next_prompt)}
+                      style={{ flex: 2, padding: '4px 0', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
+                    >↗ Use</button>
+                    <button
+                      onClick={() => copyToClipboard('next', score.next_prompt)}
+                      style={{ padding: '4px 8px', background: copied === 'next' ? '#f0fdf4' : '#f9fafb', color: copied === 'next' ? '#16a34a' : '#6b7280', border: '1px solid #e5e7eb', borderRadius: 5, cursor: 'pointer', fontSize: 10 }}
+                    >{copied === 'next' ? '✓' : '⎘'}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={e => { resizing.current = true; rstart.current = { x: e.clientX, y: e.clientY, w: sizeRef.current.w, h: sizeRef.current.h }; e.preventDefault() }}
+        style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, cursor: 'se-resize', opacity: 0.4 }}
+      >▗</div>
+    </div>
+  )
+}

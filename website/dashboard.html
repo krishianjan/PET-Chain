@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PET Dashboard — Prompt Enhancement Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --forest:  #1a3a2a;
+      --green:   #2d6a4f;
+      --leaf:    #52b788;
+      --mint:    #b7e4c7;
+      --bark:    #8c6b4a;
+      --honey:   #f8d276;
+      --sky:     #74c0e8;
+      --bg:      #f0f7ee;
+      --white:   #ffffff;
+      --td:      #0f2016;
+      --tm:      #3a5a42;
+      --border:  rgba(82,183,136,.18);
+      --card-bg: #ffffff;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--td);
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── SIDEBAR ──────────────────────────────── */
+    .sidebar {
+      width: 240px; min-height: 100vh;
+      background: var(--forest);
+      display: flex; flex-direction: column;
+      position: fixed; left: 0; top: 0; bottom: 0;
+      z-index: 50;
+      box-shadow: 4px 0 24px rgba(0,0,0,.25);
+    }
+    /* vine decoration */
+    .sidebar::after {
+      content: '';
+      position: absolute; top: 0; right: 0; width: 3px; height: 100%;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(82,183,136,.3) 20%,
+        rgba(82,183,136,.5) 50%,
+        rgba(82,183,136,.3) 80%,
+        transparent 100%
+      );
+    }
+    .sidebar-logo {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .logo-link {
+      font-size: 22px; font-weight: 800;
+      background: linear-gradient(135deg, var(--leaf), var(--honey));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      text-decoration: none; display: flex; align-items: center; gap: 8px;
+    }
+    .logo-sub { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 4px; letter-spacing: .05em; }
+
+    .nav-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.3); padding: 16px 20px 6px;
+    }
+    .sidebar-nav { flex: 1; padding: 8px 12px; overflow-y: auto; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 12px; border-radius: 12px; cursor: pointer;
+      font-size: 14px; font-weight: 500; color: rgba(255,255,255,.6);
+      transition: background .18s, color .18s, transform .15s;
+      user-select: none; margin-bottom: 2px;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.07); color: rgba(255,255,255,.9); transform: translateX(2px); }
+    .nav-item.active {
+      background: linear-gradient(90deg, rgba(82,183,136,.22), rgba(82,183,136,.08));
+      color: var(--leaf);
+      border-left: 3px solid var(--leaf);
+    }
+    .nav-icon { font-size: 18px; flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 16px 14px;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .user-row {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--leaf), var(--green));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .user-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.8); }
+    .user-role { font-size: 11px; color: rgba(255,255,255,.35); }
+    .upgrade-btn {
+      width: 100%; padding: 9px; border-radius: 10px; border: none; cursor: pointer;
+      background: linear-gradient(135deg, var(--honey), #f0b429);
+      color: var(--forest); font-weight: 700; font-size: 13px;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .upgrade-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(248,210,118,.4); }
+
+    /* ─── MAIN ─────────────────────────────────── */
+    .main {
+      margin-left: 240px;
+      flex: 1; display: flex; flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ─── HEADER ───────────────────────────────── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 40;
+      box-shadow: 0 2px 12px rgba(26,58,42,.06);
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--tm); text-decoration: none; font-size: 13px; font-weight: 500;
+      padding: 6px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: background .18s;
+    }
+    .back-btn:hover { background: var(--bg); }
+    .page-title { font-size: 20px; font-weight: 800; color: var(--forest); }
+
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .date-select {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 14px; font-size: 13px;
+      font-weight: 500; color: var(--tm); cursor: pointer;
+    }
+    .pet-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, rgba(82,183,136,.12), rgba(45,106,79,.08));
+      border: 1px solid rgba(82,183,136,.25);
+      border-radius: 999px; padding: 6px 14px;
+      font-size: 13px; font-weight: 600; color: var(--green);
+    }
+
+    /* ─── CONTENT AREA ─────────────────────────── */
+    .content { padding: 28px; flex: 1; }
+
+    /* ─── TABS (sections) ──────────────────────── */
+    .tab-section { display: none; }
+    .tab-section.active { display: block; animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ─── STAT CARDS ───────────────────────────── */
+    .stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--card-bg); border-radius: 18px; padding: 22px 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 12px rgba(26,58,42,.05);
+      position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(26,58,42,.1); }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: -20px; right: -20px;
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(82,183,136,.1) 0%, transparent 70%);
+    }
+    .stat-card-icon { font-size: 24px; margin-bottom: 10px; }
+    .stat-card-num { font-size: 28px; font-weight: 800; color: var(--forest); line-height: 1; }
+    .stat-card-label { font-size: 13px; color: var(--tm); margin-top: 4px; font-weight: 500; }
+    .stat-card-trend { font-size: 12px; font-weight: 600; margin-top: 8px; }
+    .trend-up { color: #27ae60; }
+    .trend-neutral { color: var(--sky); }
+
+    /* ─── GRID 2-COL ───────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 24px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; margin-bottom: 24px; }
+
+    /* ─── PANEL / CARD ─────────────────────────── */
+    .panel {
+      background: var(--card-bg); border-radius: 18px; padding: 24px;
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 12px rgba(26,58,42,.05);
+    }
+    .panel-title {
+      font-size: 15px; font-weight: 700; color: var(--forest);
+      margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--leaf);
+    }
+
+    /* ─── SCORE CHART ──────────────────────────── */
+    .score-chart {
+      display: flex; align-items: flex-end; gap: 4px;
+      height: 120px; padding: 0 2px;
+    }
+    .sc-bar {
+      flex: 1; border-radius: 5px 5px 0 0; min-width: 0;
+      position: relative; cursor: pointer;
+      transition: filter .2s, transform .15s;
+    }
+    .sc-bar:hover { filter: brightness(1.15); transform: scaleY(1.04); transform-origin: bottom; }
+    .sc-bar:hover::after {
+      content: attr(data-val);
+      position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+      background: var(--forest); color: white; font-size: 10px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px; white-space: nowrap; margin-bottom: 3px;
+    }
+    .chart-labels {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: var(--tm); margin-top: 6px; padding: 0 2px;
+    }
+
+    /* ─── TECHNIQUE BARS ───────────────────────── */
+    .tech-list { display: flex; flex-direction: column; gap: 14px; }
+    .tech-item {}
+    .tech-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .tech-name { font-size: 13px; font-weight: 600; color: var(--forest); }
+    .tech-pct { font-size: 12px; font-weight: 700; color: var(--leaf); }
+    .tech-bar-bg { height: 8px; background: var(--mint); border-radius: 999px; overflow: hidden; }
+    .tech-bar-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, var(--leaf), var(--green));
+      transition: width .6s ease;
+    }
+
+    /* ─── RECENT ACTIVITY TABLE ────────────────── */
+    .activity-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .activity-table th {
+      text-align: left; padding: 8px 12px;
+      font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--tm); border-bottom: 1px solid var(--border);
+    }
+    .activity-table td { padding: 12px 12px; border-bottom: 1px solid rgba(82,183,136,.08); color: var(--td); }
+    .activity-table tr:last-child td { border-bottom: none; }
+    .activity-table tr:hover td { background: rgba(82,183,136,.04); }
+    .platform-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    }
+    .chip-gpt   { background: rgba(16,163,127,.12); color: #0a8f70; }
+    .chip-claude{ background: rgba(140,60,210,.12);  color: #7a35b5; }
+    .chip-gemini{ background: rgba(66,133,244,.12);  color: #3367d6; }
+    .score-pill {
+      display: inline-flex; align-items: center;
+      padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    }
+    .score-hi  { background: rgba(39,174,96,.15);  color: #1d9a52; }
+    .score-mid { background: rgba(248,196,0,.15);   color: #b38600; }
+    .score-lo  { background: rgba(231,76,60,.15);   color: #c0392b; }
+
+    /* ─── LLM TABS ─────────────────────────────── */
+    .llm-header-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
+    .llm-hs {
+      background: var(--bg); border-radius: 14px; padding: 18px;
+      border: 1px solid var(--border); text-align: center;
+    }
+    .llm-hs-num { font-size: 26px; font-weight: 800; color: var(--forest); }
+    .llm-hs-label { font-size: 12px; color: var(--tm); margin-top: 4px; }
+
+    .insight-box {
+      background: linear-gradient(135deg, rgba(82,183,136,.08), rgba(45,106,79,.05));
+      border: 1px solid rgba(82,183,136,.2); border-radius: 14px; padding: 16px 20px;
+      font-size: 14px; color: var(--tm); line-height: 1.6; margin-top: 18px;
+    }
+    .insight-box strong { color: var(--green); }
+
+    .top-prompt-card {
+      background: linear-gradient(135deg, var(--forest), var(--green));
+      border-radius: 14px; padding: 20px; margin-top: 18px; position: relative; overflow: hidden;
+    }
+    .top-prompt-card::before {
+      content: '🏆';
+      position: absolute; top: -10px; right: -10px;
+      font-size: 60px; opacity: .15;
+    }
+    .tp-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mint); margin-bottom: 10px; }
+    .tp-text { font-size: 13px; color: rgba(255,255,255,.85); line-height: 1.6; font-style: italic; margin-bottom: 12px; }
+    .tp-score { display: inline-flex; align-items: center; gap: 6px; background: rgba(248,210,118,.2); color: var(--honey); font-weight: 700; font-size: 14px; padding: 4px 12px; border-radius: 999px; }
+
+    /* ─── COMBINED: RADAR ──────────────────────── */
+    .radar-wrap { display: flex; justify-content: center; margin: 24px 0; }
+    .radar-container { position: relative; width: 220px; height: 220px; }
+    .radar-svg { width: 100%; height: 100%; }
+    .radar-legend { display: flex; gap: 20px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+    .radar-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tm); font-weight: 500; }
+    .rl-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    .winner-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: linear-gradient(135deg, var(--honey), #f0b429);
+      color: var(--forest); font-weight: 700; font-size: 13px;
+      padding: 4px 12px; border-radius: 999px; margin-left: 8px;
+    }
+
+    .compare-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    .compare-card {
+      background: var(--bg); border-radius: 14px; padding: 20px; text-align: center;
+      border: 1px solid var(--border); position: relative; overflow: hidden;
+      transition: transform .2s;
+    }
+    .compare-card:hover { transform: translateY(-3px); }
+    .compare-card.winner { border-color: var(--leaf); background: rgba(82,183,136,.05); }
+    .cc-icon { font-size: 32px; margin-bottom: 10px; }
+    .cc-name { font-size: 15px; font-weight: 700; color: var(--forest); margin-bottom: 4px; }
+    .cc-score { font-size: 30px; font-weight: 800; color: var(--green); }
+    .cc-label { font-size: 11px; color: var(--tm); }
+
+    /* ─── MY PET ───────────────────────────────── */
+    .pets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
+    .pet-card {
+      background: var(--card-bg); border-radius: 20px; padding: 24px 16px; text-align: center;
+      border: 2px solid var(--border); cursor: pointer;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+      position: relative;
+    }
+    .pet-card:hover { transform: translateY(-5px); box-shadow: 0 12px 36px rgba(26,58,42,.12); }
+    .pet-card.active-pet {
+      border-color: var(--leaf);
+      background: linear-gradient(135deg, rgba(82,183,136,.06), rgba(45,106,79,.03));
+    }
+    .active-badge {
+      position: absolute; top: 12px; right: 12px;
+      background: var(--leaf); color: white; font-size: 10px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .pet-big { font-size: 56px; margin-bottom: 12px; display: block; }
+    .pet-card:hover .pet-big { animation: petBounce .6s ease; }
+    @keyframes petBounce {
+      0%,100% { transform: translateY(0) scale(1); }
+      40%      { transform: translateY(-10px) scale(1.1); }
+    }
+    .pet-card-name { font-size: 16px; font-weight: 700; color: var(--forest); margin-bottom: 4px; }
+    .pet-card-sessions { font-size: 12px; color: var(--tm); margin-bottom: 8px; }
+    .pet-card-desc { font-size: 12px; color: #6b8a74; line-height: 1.5; }
+
+    /* ─── SETTINGS ─────────────────────────────── */
+    .settings-section { margin-bottom: 28px; }
+    .settings-title {
+      font-size: 14px; font-weight: 700; color: var(--forest);
+      margin-bottom: 14px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .api-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; border-bottom: 1px solid rgba(82,183,136,.08);
+    }
+    .api-row:last-child { border-bottom: none; }
+    .api-info { display: flex; align-items: center; gap: 12px; }
+    .api-icon { font-size: 22px; }
+    .api-name { font-size: 14px; font-weight: 600; color: var(--forest); }
+    .api-status-ok { font-size: 12px; color: #27ae60; font-weight: 600; }
+    .api-status-no { font-size: 12px; color: #e74c3c; font-weight: 500; }
+    .connect-btn {
+      padding: 7px 16px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--bg); font-size: 13px; font-weight: 600;
+      color: var(--tm); cursor: pointer; transition: background .18s, border-color .18s;
+    }
+    .connect-btn:hover { background: var(--mint); border-color: var(--leaf); }
+    .connect-btn.connected { background: rgba(39,174,96,.1); border-color: rgba(39,174,96,.3); color: #27ae60; }
+
+    .theme-swatches { display: flex; gap: 16px; }
+    .theme-swatch {
+      width: 80px; text-align: center; cursor: pointer;
+    }
+    .swatch-circle {
+      width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 8px;
+      border: 3px solid transparent; transition: border-color .2s, transform .2s;
+    }
+    .theme-swatch:hover .swatch-circle { transform: scale(1.08); }
+    .theme-swatch.active .swatch-circle { border-color: var(--leaf); }
+    .swatch-label { font-size: 12px; font-weight: 600; color: var(--tm); }
+
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid rgba(82,183,136,.08);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 14px; color: var(--forest); font-weight: 500; }
+    .toggle-sub { font-size: 12px; color: var(--tm); margin-top: 2px; }
+    .toggle {
+      position: relative; width: 44px; height: 24px; cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; border-radius: 999px;
+      background: #ddd; transition: background .25s;
+    }
+    .slider::before {
+      content: ''; position: absolute;
+      width: 18px; height: 18px; left: 3px; top: 3px;
+      border-radius: 50%; background: white;
+      transition: transform .25s; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .toggle input:checked + .slider { background: var(--leaf); }
+    .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+    .platform-connect-row {
+      display: flex; align-items: center; justify-content: space-between; padding: 10px 0;
+      border-bottom: 1px solid rgba(82,183,136,.08);
+    }
+    .platform-connect-row:last-child { border-bottom: none; }
+    .pc-info { display: flex; align-items: center; gap: 12px; }
+    .pc-icon { font-size: 24px; }
+    .pc-name { font-size: 14px; font-weight: 600; color: var(--forest); }
+
+    /* ─── MOBILE ───────────────────────────────── */
+    @media (max-width: 900px) {
+      .sidebar { width: 64px; }
+      .sidebar .logo-link span, .sidebar .logo-sub,
+      .nav-section-label, .nav-item span:not(.nav-icon),
+      .sidebar-footer .user-name, .sidebar-footer .user-role,
+      .sidebar-footer .upgrade-btn { display: none; }
+      .main { margin-left: 64px; }
+      .stat-row { grid-template-columns: repeat(2,1fr); }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .compare-row { grid-template-columns: 1fr; }
+      .llm-header-stats { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+      .stat-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─────────── SIDEBAR ─────────── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <a href="index.html" class="logo-link">🌿 <span>PET</span></a>
+    <div class="logo-sub">Prompt Enhancement Tool</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section-label">Analytics</div>
+    <div class="nav-item active" data-tab="overview">
+      <span class="nav-icon">📊</span><span>Overview</span>
+    </div>
+    <div class="nav-item" data-tab="gpt">
+      <span class="nav-icon">🤖</span><span>GPT</span>
+    </div>
+    <div class="nav-item" data-tab="claude">
+      <span class="nav-icon">🟣</span><span>Claude</span>
+    </div>
+    <div class="nav-item" data-tab="gemini">
+      <span class="nav-icon">💎</span><span>Gemini</span>
+    </div>
+    <div class="nav-item" data-tab="combined">
+      <span class="nav-icon">📈</span><span>Combined</span>
+    </div>
+    <div class="nav-section-label" style="margin-top:8px;">Personal</div>
+    <div class="nav-item" data-tab="mypet">
+      <span class="nav-icon">🐾</span><span>My Pet</span>
+    </div>
+    <div class="nav-item" data-tab="settings">
+      <span class="nav-icon">⚙️</span><span>Settings</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="avatar">🌿</div>
+      <div>
+        <div class="user-name">Guest User</div>
+        <div class="user-role">Free plan</div>
+      </div>
+    </div>
+    <button class="upgrade-btn">⬆ Upgrade to Pro</button>
+  </div>
+</aside>
+
+<!-- ─────────── MAIN ─────────── -->
+<div class="main">
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="back-btn">← Back to Site</a>
+      <h1 class="page-title" id="pageTitle">Overview</h1>
+    </div>
+    <div class="header-right">
+      <div class="date-select">📅 Last 30 days ▾</div>
+      <div class="pet-chip" id="activePetChip">🐕 Buddy</div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ════════════ OVERVIEW ════════════ -->
+    <div class="tab-section active" id="tab-overview">
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-card-icon">✏️</div>
+          <div class="stat-card-num">142</div>
+          <div class="stat-card-label">Prompts Rewritten</div>
+          <div class="stat-card-trend trend-up">↑ +12% this week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon">⬆️</div>
+          <div class="stat-card-num">2,840</div>
+          <div class="stat-card-label">Tokens Saved</div>
+          <div class="stat-card-trend trend-neutral">≈ $0.28 saved</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon">📊</div>
+          <div class="stat-card-num" style="color:var(--leaf);">73%</div>
+          <div class="stat-card-label">Avg Score</div>
+          <div class="stat-card-trend trend-up">↑ from 61% last month</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon">🔁</div>
+          <div class="stat-card-num">38</div>
+          <div class="stat-card-label">Sessions</div>
+          <div class="stat-card-trend trend-up">↑ Active this month</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Score History -->
+        <div class="panel" style="grid-column: 1;">
+          <div class="panel-title"><span class="dot"></span> Score History — Last 20 Sessions</div>
+          <div class="score-chart" id="mainChart"></div>
+          <div class="chart-labels">
+            <span>Session 1</span>
+            <span>Session 10</span>
+            <span>Session 20</span>
+          </div>
+        </div>
+
+        <!-- Technique Breakdown -->
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Technique Breakdown</div>
+          <div class="tech-list">
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Chain of Thought</span><span class="tech-pct">42%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:42%;"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Few-Shot</span><span class="tech-pct">31%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:31%;background:linear-gradient(90deg,#74c0e8,#4ab0e0);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Socratic Method</span><span class="tech-pct">15%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:15%;background:linear-gradient(90deg,#f8d276,#e0b429);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Tree of Thought</span><span class="tech-pct">8%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:8%;background:linear-gradient(90deg,#8c6b4a,#6b4f35);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Expert Panel</span><span class="tech-pct">4%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:4%;background:linear-gradient(90deg,#b7e4c7,#85c9a0);"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="panel">
+        <div class="panel-title"><span class="dot"></span> Recent Activity</div>
+        <table class="activity-table">
+          <thead>
+            <tr>
+              <th>Prompt</th>
+              <th>Platform</th>
+              <th>Score</th>
+              <th>Technique</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>"Explain quantum entanglement simply…"</td>
+              <td><span class="platform-chip chip-gpt">🤖 ChatGPT</span></td>
+              <td><span class="score-pill score-hi">89</span></td>
+              <td>Chain of Thought</td>
+              <td>May 14, 2026</td>
+            </tr>
+            <tr>
+              <td>"Write a cover letter for a PM role at…"</td>
+              <td><span class="platform-chip chip-claude">🟣 Claude</span></td>
+              <td><span class="score-pill score-hi">82</span></td>
+              <td>Expert Panel</td>
+              <td>May 13, 2026</td>
+            </tr>
+            <tr>
+              <td>"Help me debug this Python script that…"</td>
+              <td><span class="platform-chip chip-gpt">🤖 ChatGPT</span></td>
+              <td><span class="score-pill score-mid">67</span></td>
+              <td>Socratic Method</td>
+              <td>May 12, 2026</td>
+            </tr>
+            <tr>
+              <td>"Create a 30-day workout plan for…"</td>
+              <td><span class="platform-chip chip-gemini">💎 Gemini</span></td>
+              <td><span class="score-pill score-mid">74</span></td>
+              <td>Few-Shot</td>
+              <td>May 11, 2026</td>
+            </tr>
+            <tr>
+              <td>"Summarize the key ideas in Atomic Habi…"</td>
+              <td><span class="platform-chip chip-claude">🟣 Claude</span></td>
+              <td><span class="score-pill score-hi">91</span></td>
+              <td>Tree of Thought</td>
+              <td>May 10, 2026</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- end overview -->
+
+    <!-- ════════════ GPT ════════════ -->
+    <div class="tab-section" id="tab-gpt">
+      <div class="llm-header-stats">
+        <div class="llm-hs">
+          <div class="llm-hs-num">67</div>
+          <div class="llm-hs-label">Sessions on GPT</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="color:var(--leaf);">71%</div>
+          <div class="llm-hs-label">Avg Score</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="font-size:18px;">Chain of Thought</div>
+          <div class="llm-hs-label">Most Used Technique</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> GPT Score Trend (volatile)</div>
+          <div class="score-chart" id="gptChart"></div>
+          <div class="chart-labels"><span>Session 1</span><span>Session 10</span><span>Session 20</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Technique Distribution</div>
+          <div class="tech-list">
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Chain of Thought</span><span class="tech-pct">55%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:55%;"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Few-Shot</span><span class="tech-pct">28%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:28%;background:linear-gradient(90deg,#74c0e8,#4ab0e0);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Expert Panel</span><span class="tech-pct">17%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:17%;background:linear-gradient(90deg,#f8d276,#e0b429);"></div></div>
+            </div>
+          </div>
+          <div class="top-prompt-card">
+            <div class="tp-label">Top Performing Prompt</div>
+            <div class="tp-text">"You are a senior systems architect. Using Chain-of-Thought reasoning, design a scalable microservices architecture for a food delivery app with 1M DAU…"</div>
+            <span class="tp-score">🏆 Score: 94/100</span>
+          </div>
+        </div>
+      </div>
+      <div class="insight-box">
+        <strong>GPT tip:</strong> Chain-of-Thought prompts consistently score 15–20 points higher than plain requests on ChatGPT. Try adding "Think step by step, then provide your answer" to any complex query.
+      </div>
+    </div><!-- end gpt -->
+
+    <!-- ════════════ CLAUDE ════════════ -->
+    <div class="tab-section" id="tab-claude">
+      <div class="llm-header-stats">
+        <div class="llm-hs">
+          <div class="llm-hs-num">45</div>
+          <div class="llm-hs-label">Sessions on Claude</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="color:var(--leaf);">78%</div>
+          <div class="llm-hs-label">Avg Score (highest!)</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="font-size:18px;">Socratic Method</div>
+          <div class="llm-hs-label">Most Used Technique</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Claude Score Trend (consistent)</div>
+          <div class="score-chart" id="claudeChart"></div>
+          <div class="chart-labels"><span>Session 1</span><span>Session 10</span><span>Session 20</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Technique Distribution</div>
+          <div class="tech-list">
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Socratic Method</span><span class="tech-pct">46%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:46%;background:linear-gradient(90deg,#f8d276,#e0b429);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Tree of Thought</span><span class="tech-pct">32%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:32%;background:linear-gradient(90deg,#8c6b4a,#6b4f35);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Chain of Thought</span><span class="tech-pct">22%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:22%;"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="insight-box">
+        <strong>Claude responds best to:</strong> detailed context + explicit step-by-step requests. Claude excels at nuanced reasoning when you provide background, constraints, and desired output format upfront. Socratic-style prompts that ask Claude to "explore the question" yield notably deeper, more structured responses.
+      </div>
+    </div><!-- end claude -->
+
+    <!-- ════════════ GEMINI ════════════ -->
+    <div class="tab-section" id="tab-gemini">
+      <div class="llm-header-stats">
+        <div class="llm-hs">
+          <div class="llm-hs-num">30</div>
+          <div class="llm-hs-label">Sessions on Gemini</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="color:var(--leaf);">68%</div>
+          <div class="llm-hs-label">Avg Score</div>
+        </div>
+        <div class="llm-hs">
+          <div class="llm-hs-num" style="font-size:18px;">Few-Shot</div>
+          <div class="llm-hs-label">Most Used Technique</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Gemini Score Trend (improving)</div>
+          <div class="score-chart" id="geminiChart"></div>
+          <div class="chart-labels"><span>Session 1</span><span>Session 10</span><span>Session 20</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Technique Distribution</div>
+          <div class="tech-list">
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Few-Shot</span><span class="tech-pct">50%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:50%;background:linear-gradient(90deg,#74c0e8,#4ab0e0);"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Chain of Thought</span><span class="tech-pct">35%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:35%;"></div></div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-header"><span class="tech-name">Expert Panel</span><span class="tech-pct">15%</span></div>
+              <div class="tech-bar-bg"><div class="tech-bar-fill" style="width:15%;background:linear-gradient(90deg,#f8d276,#e0b429);"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="insight-box">
+        <strong>Gemini improvement trend:</strong> Your Gemini scores rose from 52% to 81% over the last 30 sessions — a 29-point gain. Few-Shot examples are proving especially effective. Keep providing 2–3 examples of the output format you want.
+      </div>
+    </div><!-- end gemini -->
+
+    <!-- ════════════ COMBINED ════════════ -->
+    <div class="tab-section" id="tab-combined">
+      <div class="compare-row" style="margin-bottom:24px;">
+        <div class="compare-card">
+          <div class="cc-icon">🤖</div>
+          <div class="cc-name">ChatGPT</div>
+          <div class="cc-score">71%</div>
+          <div class="cc-label">avg score · 67 sessions</div>
+        </div>
+        <div class="compare-card winner">
+          <div class="cc-icon">🟣</div>
+          <div class="cc-name">Claude <span class="winner-badge">🏆 Winner</span></div>
+          <div class="cc-score" style="color:var(--forest);">78%</div>
+          <div class="cc-label">avg score · 45 sessions</div>
+        </div>
+        <div class="compare-card">
+          <div class="cc-icon">💎</div>
+          <div class="cc-name">Gemini</div>
+          <div class="cc-score">68%</div>
+          <div class="cc-label">avg score · 30 sessions</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Radar Comparison (Score / Consistency / Improvement)</div>
+          <div class="radar-wrap">
+            <div class="radar-container">
+              <svg class="radar-svg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+                <!-- background grid -->
+                <polygon points="110,20 200,165 20,165" fill="none" stroke="#e0ede6" stroke-width="1"/>
+                <polygon points="110,47 178,148 42,148" fill="none" stroke="#e0ede6" stroke-width="1"/>
+                <polygon points="110,73 155,130 65,130" fill="none" stroke="#e0ede6" stroke-width="1"/>
+                <polygon points="110,100 133,112 87,112" fill="none" stroke="#e0ede6" stroke-width="1"/>
+                <!-- axis labels -->
+                <text x="110" y="14" text-anchor="middle" font-size="11" fill="#6b8a74" font-weight="600">Score</text>
+                <text x="210" y="172" text-anchor="middle" font-size="11" fill="#6b8a74" font-weight="600">Consistency</text>
+                <text x="10" y="172" text-anchor="middle" font-size="11" fill="#6b8a74" font-weight="600">Improve</text>
+                <!-- ChatGPT: score 71%, consistency 62%, improvement 70% -->
+                <!-- Map 71%→0-1 of axis: Score axis top vertex (110,20), Consistency right (200,165), Improvement left (20,165) -->
+                <!-- interpolating along each axis from center (110,110) to vertex -->
+                <!-- GPT: s=0.71, c=0.62, i=0.70 -->
+                <polygon
+                  points="110,54 165,148 41,148"
+                  fill="rgba(16,163,127,0.18)" stroke="#10a37f" stroke-width="2"
+                  style="display:none"
+                />
+                <!-- Computed points: Score axis: center(110,110) + s*(20-110, 20-110) = (110+0.71*0, 110+0.71*(-90))=(110,46) -->
+                <!-- Consistency: center(110,110) + c*(200-110,165-110) = (110+0.62*90, 110+0.62*55)=(166,144) -->
+                <!-- Improvement: center(110,110) + i*(20-110,165-110) = (110+0.7*(-90),110+0.7*55)=(47,149) -->
+                <polygon
+                  points="110,46 166,144 47,149"
+                  fill="rgba(16,163,127,0.18)" stroke="#10a37f" stroke-width="2.5"
+                />
+                <!-- Claude: s=0.78, c=0.85, i=0.65 -->
+                <!-- Score: (110, 110-0.78*90)=(110,39.8)≈(110,40) -->
+                <!-- Consistency: (110+0.85*90, 110+0.85*55)=(186.5,156.75)≈(187,157) -->
+                <!-- Improvement: (110-0.65*90, 110+0.65*55)=(51.5,145.75)≈(52,146) -->
+                <polygon
+                  points="110,40 187,157 52,146"
+                  fill="rgba(140,60,210,0.15)" stroke="#8c3cd2" stroke-width="2.5"
+                />
+                <!-- Gemini: s=0.68, c=0.58, i=0.80 -->
+                <!-- Score: (110,110-0.68*90)=(110,48.8)≈(110,49) -->
+                <!-- Consistency: (110+0.58*90, 110+0.58*55)=(162.2,141.9)≈(162,142) -->
+                <!-- Improvement: (110-0.8*90, 110+0.8*55)=(38,154) -->
+                <polygon
+                  points="110,49 162,142 38,154"
+                  fill="rgba(66,133,244,0.15)" stroke="#4285f4" stroke-width="2.5"
+                />
+                <!-- dots -->
+                <circle cx="110" cy="46" r="4" fill="#10a37f"/>
+                <circle cx="166" cy="144" r="4" fill="#10a37f"/>
+                <circle cx="47" cy="149" r="4" fill="#10a37f"/>
+                <circle cx="110" cy="40" r="4" fill="#8c3cd2"/>
+                <circle cx="187" cy="157" r="4" fill="#8c3cd2"/>
+                <circle cx="52" cy="146" r="4" fill="#8c3cd2"/>
+                <circle cx="110" cy="49" r="4" fill="#4285f4"/>
+                <circle cx="162" cy="142" r="4" fill="#4285f4"/>
+                <circle cx="38" cy="154" r="4" fill="#4285f4"/>
+              </svg>
+            </div>
+          </div>
+          <div class="radar-legend">
+            <div class="radar-legend-item"><div class="rl-dot" style="background:#10a37f;"></div>ChatGPT</div>
+            <div class="radar-legend-item"><div class="rl-dot" style="background:#8c3cd2;"></div>Claude</div>
+            <div class="radar-legend-item"><div class="rl-dot" style="background:#4285f4;"></div>Gemini</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span class="dot"></span> Score Comparison Timeline</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#10a37f;margin-bottom:5px;">🤖 ChatGPT</div>
+              <div class="tech-bar-bg" style="height:12px;">
+                <div class="tech-bar-fill" style="width:71%;height:100%;background:linear-gradient(90deg,#10a37f,#0d8a6b);"></div>
+              </div>
+              <div style="font-size:11px;color:var(--tm);margin-top:3px;">71% avg · 67 sessions</div>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#8c3cd2;margin-bottom:5px;">🟣 Claude</div>
+              <div class="tech-bar-bg" style="height:12px;">
+                <div class="tech-bar-fill" style="width:78%;height:100%;background:linear-gradient(90deg,#8c3cd2,#6b28a5);"></div>
+              </div>
+              <div style="font-size:11px;color:var(--tm);margin-top:3px;">78% avg · 45 sessions · 🏆 Highest</div>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#4285f4;margin-bottom:5px;">💎 Gemini</div>
+              <div class="tech-bar-bg" style="height:12px;">
+                <div class="tech-bar-fill" style="width:68%;height:100%;background:linear-gradient(90deg,#4285f4,#2a6fd4);"></div>
+              </div>
+              <div style="font-size:11px;color:var(--tm);margin-top:3px;">68% avg · 30 sessions · Most improved</div>
+            </div>
+          </div>
+          <div class="insight-box" style="margin-top:18px;">
+            <strong>Insight:</strong> Claude consistently scores 7–10 points above GPT on structured reasoning tasks. For creative writing, GPT leads. Gemini shows the fastest improvement trajectory of the three.
+          </div>
+        </div>
+      </div>
+    </div><!-- end combined -->
+
+    <!-- ════════════ MY PET ════════════ -->
+    <div class="tab-section" id="tab-mypet">
+      <div style="margin-bottom:24px;">
+        <div style="font-size:16px;color:var(--tm);line-height:1.6;">Choose your companion. Your pet travels with you across every AI conversation — and grows as you improve.</div>
+      </div>
+      <div class="pets-grid">
+        <div class="pet-card active-pet" onclick="selectPet(this,'🐕','Buddy')">
+          <span class="active-badge">Active</span>
+          <span class="pet-big">🐕</span>
+          <div class="pet-card-name">Buddy</div>
+          <div class="pet-card-sessions">142 sessions</div>
+          <div class="pet-card-desc">Loyal, energetic, and always ready to fetch the best prompt. Buddy never gives up on a hard question.</div>
+        </div>
+        <div class="pet-card" onclick="selectPet(this,'🐈','Pixel')">
+          <span class="pet-big">🐈</span>
+          <div class="pet-card-name">Pixel</div>
+          <div class="pet-card-sessions">0 sessions</div>
+          <div class="pet-card-desc">Curious and precise. Pixel stalks every prompt with quiet intensity and pounces on ambiguity.</div>
+        </div>
+        <div class="pet-card" onclick="selectPet(this,'🦜','Sage')">
+          <span class="pet-big">🦜</span>
+          <div class="pet-card-name">Sage</div>
+          <div class="pet-card-sessions">0 sessions</div>
+          <div class="pet-card-desc">Wise and vocal. Sage has a way with words and loves Socratic prompts that spark deep exploration.</div>
+        </div>
+        <div class="pet-card" onclick="selectPet(this,'🐇','Dash')">
+          <span class="pet-big">🐇</span>
+          <div class="pet-card-name">Dash</div>
+          <div class="pet-card-sessions">0 sessions</div>
+          <div class="pet-card-desc">Fast-thinking and nimble. Dash specializes in rapid iteration — great for brainstorming sessions.</div>
+        </div>
+        <div class="pet-card" onclick="selectPet(this,'🧑','Gopal')">
+          <span class="pet-big">🧑</span>
+          <div class="pet-card-name">Gopal</div>
+          <div class="pet-card-sessions">0 sessions</div>
+          <div class="pet-card-desc">The wise guide. Gopal brings human warmth and expert-panel thinking to every prompt challenge.</div>
+        </div>
+      </div>
+    </div><!-- end mypet -->
+
+    <!-- ════════════ SETTINGS ════════════ -->
+    <div class="tab-section" id="tab-settings">
+      <div class="grid-2">
+        <div>
+          <!-- API Keys -->
+          <div class="panel" style="margin-bottom:22px;">
+            <div class="panel-title"><span class="dot"></span> API Keys</div>
+            <div class="settings-section">
+              <div class="api-row">
+                <div class="api-info">
+                  <span class="api-icon">⚡</span>
+                  <div>
+                    <div class="api-name">Groq</div>
+                    <div class="api-status-ok">✓ Connected</div>
+                  </div>
+                </div>
+                <button class="connect-btn connected">Manage</button>
+              </div>
+              <div class="api-row">
+                <div class="api-info">
+                  <span class="api-icon">🤖</span>
+                  <div>
+                    <div class="api-name">OpenAI</div>
+                    <div class="api-status-no">Not connected</div>
+                  </div>
+                </div>
+                <button class="connect-btn">Connect</button>
+              </div>
+              <div class="api-row">
+                <div class="api-info">
+                  <span class="api-icon">🐋</span>
+                  <div>
+                    <div class="api-name">DeepSeek</div>
+                    <div class="api-status-no">Not connected</div>
+                  </div>
+                </div>
+                <button class="connect-btn">Connect</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connected Accounts -->
+          <div class="panel">
+            <div class="panel-title"><span class="dot"></span> Connected Platforms</div>
+            <div class="settings-section">
+              <div class="platform-connect-row">
+                <div class="pc-info"><span class="pc-icon">🤖</span><span class="pc-name">ChatGPT (chat.openai.com)</span></div>
+                <button class="connect-btn connected">Connected ✓</button>
+              </div>
+              <div class="platform-connect-row">
+                <div class="pc-info"><span class="pc-icon">🟣</span><span class="pc-name">Claude (claude.ai)</span></div>
+                <button class="connect-btn connected">Connected ✓</button>
+              </div>
+              <div class="platform-connect-row">
+                <div class="pc-info"><span class="pc-icon">💎</span><span class="pc-name">Gemini (gemini.google.com)</span></div>
+                <button class="connect-btn">Connect</button>
+              </div>
+              <div class="platform-connect-row">
+                <div class="pc-info"><span class="pc-icon">🐋</span><span class="pc-name">DeepSeek (chat.deepseek.com)</span></div>
+                <button class="connect-btn">Connect</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Theme -->
+          <div class="panel" style="margin-bottom:22px;">
+            <div class="panel-title"><span class="dot"></span> Theme</div>
+            <div class="theme-swatches">
+              <div class="theme-swatch active" onclick="selectTheme(this)">
+                <div class="swatch-circle" style="background:linear-gradient(135deg,#1a3a2a,#52b788);"></div>
+                <div class="swatch-label">Forest</div>
+              </div>
+              <div class="theme-swatch" onclick="selectTheme(this)">
+                <div class="swatch-circle" style="background:linear-gradient(135deg,#0a0f1a,#1e3a5f);"></div>
+                <div class="swatch-label">Night</div>
+              </div>
+              <div class="theme-swatch" onclick="selectTheme(this)">
+                <div class="swatch-circle" style="background:linear-gradient(135deg,#f5f5f5,#e0e0e0);border:2px solid #ccc;"></div>
+                <div class="swatch-label">Classic</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="panel">
+            <div class="panel-title"><span class="dot"></span> Notification Preferences</div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Weekly progress report</div>
+                <div class="toggle-sub">Summary of your prompt performance each week</div>
+              </div>
+              <label class="toggle"><input type="checkbox" checked /><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Score milestone alerts</div>
+                <div class="toggle-sub">Notify when you hit a new high score</div>
+              </div>
+              <label class="toggle"><input type="checkbox" checked /><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">New technique tips</div>
+                <div class="toggle-sub">Tips based on your current prompt style</div>
+              </div>
+              <label class="toggle"><input type="checkbox" /><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Feature announcements</div>
+                <div class="toggle-sub">When new PET features launch</div>
+              </div>
+              <label class="toggle"><input type="checkbox" checked /><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end settings -->
+
+  </div><!-- end content -->
+</div><!-- end main -->
+
+<script>
+  // ── Tab navigation ──
+  const navItems = document.querySelectorAll('.nav-item');
+  const tabSections = document.querySelectorAll('.tab-section');
+  const pageTitle = document.getElementById('pageTitle');
+  const titles = {
+    overview: 'Overview',
+    gpt: 'ChatGPT Analytics',
+    claude: 'Claude Analytics',
+    gemini: 'Gemini Analytics',
+    combined: 'Combined View',
+    mypet: 'My Pet',
+    settings: 'Settings'
+  };
+
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const tab = item.dataset.tab;
+      navItems.forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+      tabSections.forEach(s => s.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+      pageTitle.textContent = titles[tab] || tab;
+    });
+  });
+
+  // ── Chart builder ──
+  function buildChart(containerId, scores) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const max = 100;
+    scores.forEach(s => {
+      const bar = document.createElement('div');
+      bar.className = 'sc-bar';
+      bar.setAttribute('data-val', s);
+      bar.style.height = ((s / max) * 100) + '%';
+      const color = s >= 75 ? '#52b788' : s >= 55 ? '#f8d276' : '#e05c5c';
+      bar.style.background = `linear-gradient(180deg, ${color}, ${color}bb)`;
+      container.appendChild(bar);
+    });
+  }
+
+  // Overview (gradual improvement 45→85)
+  buildChart('mainChart', [45,48,50,52,55,53,58,60,62,64,62,67,70,68,72,74,73,78,82,85]);
+  // GPT (more volatile)
+  buildChart('gptChart', [52,60,48,65,58,70,55,67,72,62,76,68,71,65,78,70,74,68,79,73]);
+  // Claude (higher, more consistent)
+  buildChart('claudeChart', [65,68,70,72,71,74,76,73,78,80,77,82,79,83,81,85,83,86,84,88]);
+  // Gemini (improvement trajectory)
+  buildChart('geminiChart', [48,50,52,55,54,58,60,62,65,63,67,70,68,72,71,75,74,78,80,82]);
+
+  // ── Pet selection ──
+  function selectPet(card, emoji, name) {
+    document.querySelectorAll('.pet-card').forEach(c => {
+      c.classList.remove('active-pet');
+      const badge = c.querySelector('.active-badge');
+      if (badge) badge.remove();
+    });
+    card.classList.add('active-pet');
+    const badge = document.createElement('span');
+    badge.className = 'active-badge';
+    badge.textContent = 'Active';
+    card.prepend(badge);
+    document.getElementById('activePetChip').textContent = emoji + ' ' + name;
+  }
+
+  // ── Theme selection ──
+  function selectTheme(swatch) {
+    document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+  }
+</script>
+</body>
+</html>

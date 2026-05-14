@@ -1,0 +1,141 @@
+.pet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    cursor: move;
+}
+
+.pet-close-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.pet-close-btn:hover {
+    color: #ef4444;
+}
+
+.pet-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.pet-btn-primary {
+    flex: 1;
+    padding: 12px;
+    background: linear-gradient(135deg, #534ab7 0%, #7c72ff 100%);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(83, 74, 183, 0.3);
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.pet-btn-primary:active { transform: scale(0.97); }
+
+.pet-btn-secondary {
+    flex: 1;
+    padding: 12px;
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pet-btn-secondary:hover { background: #e5e7eb; }
+
+.pet-rewrite-card {
+    background: white;
+    border: 1px solid #f3f4f6;
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pet-rewrite-card.recommended {
+    border: 2px solid #534ab7;
+    background: #f9f9ff;
+}
+
+.pet-prompt-preview {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #4b5563;
+    max-height: 120px;
+    overflow-y: auto;
+    margin-bottom: 14px;
+}
+
+.pet-use-btn {
+    width: 100%;
+    padding: 8px;
+    background: #eeedfe;
+    color: #534ab7;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pet-use-btn:hover { background: #e0deff; }
+
+.pet-badge {
+    background: #534ab7;
+    color: white;
+    font-size: 8px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+}
+
+.pet-eval-panel {
+    background: #f9fafb;
+    border-radius: 20px;
+    padding: 16px;
+    margin-top: 10px;
+}
+
+.pet-progress-bg {
+    background: #e5e7eb;
+    height: 8px;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.pet-progress-fill {
+    background: linear-gradient(90deg, #534ab7 0%, #10b981 100%);
+    height: 100%;
+    border-radius: 99px;
+    transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pet-next-step {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 12px;
+    margin-top: 16px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.pet-next-step:hover { transform: translateY(-2px); border-color: #534ab7; }

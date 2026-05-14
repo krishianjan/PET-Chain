@@ -1,0 +1,29 @@
+{
+    "version": 1,
+    "platforms": {
+        "chatgpt": {
+            "textarea": "#prompt-textarea",
+            "response": ".markdown.prose",
+            "sendBtn": "[data-testid='send-button']",
+            "model": "[data-testid='model-switcher-dropdown-button']"
+        },
+        "claude": {
+            "textarea": "[contenteditable='true'].ProseMirror",
+            "response": ".font-claude-message",
+            "sendBtn": "[aria-label='Send message']",
+            "model": ".model-selector-value"
+        },
+        "gemini": {
+            "textarea": "rich-textarea .ql-editor",
+            "response": ".model-response-text",
+            "sendBtn": ".send-button",
+            "model": ".model-selector"
+        },
+        "deepseek": {
+            "textarea": "#chat-input",
+            "response": ".ds-markdown",
+            "sendBtn": "[aria-label='Send']",
+            "model": ".model-name"
+        }
+    }
+}

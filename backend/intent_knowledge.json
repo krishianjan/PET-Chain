@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "intents": [
+    {
+      "category": "coding",
+      "subcategories": [
+        {
+          "name": "build_app_website",
+          "keywords": ["build", "create", "app", "website", "web app", "full stack", "scaffold", "platform", "dashboard"],
+          "technique": "Bolt/V0 Spec",
+          "format": "Modular Architecture Breakdown",
+          "follow_up": "Implement the first component with complete working code, file paths, and install commands",
+          "example_rewrite": "Provide a full technical specification including tech stack, folder structure, and MVP features."
+        },
+        {
+          "name": "debug_code",
+          "keywords": ["debug", "error", "bug", "crash", "not working", "fix", "troubleshoot", "stack trace"],
+          "technique": "ReAct Diagnostic",
+          "format": "Hypothesis -> Verification -> Solution",
+          "follow_up": "Propose a unit test to prevent this bug from recurring",
+          "example_rewrite": "Analyze the error, provide 3 likely causes, and a step-by-step fix."
+        }
+      ]
+    },
+    {
+      "category": "creative",
+      "subcategories": [
+        {
+          "name": "writing_story",
+          "keywords": ["story", "novel", "book", "chapter", "plot", "worldbuilding", "character", "dialogue"],
+          "technique": "Sanderson's Laws of Magic / Hero's Journey",
+          "format": "Narrative Bible",
+          "follow_up": "Write the first 500 words of this chapter in a cinematic style",
+          "example_rewrite": "Expand on character motivation and create a unique environmental atmosphere."
+        }
+      ]
+    },
+    {
+      "category": "academic",
+      "subcategories": [
+        {
+          "name": "math_physics",
+          "keywords": ["solve", "equation", "math", "physics", "calculus", "formula", "derivation"],
+          "technique": "Chain-of-Thought (CoT)",
+          "format": "First Principles Derivation",
+          "follow_up": "Explain the intuition behind the second step as if I am 10 years old",
+          "example_rewrite": "Break down the complex problem into atomic steps and verify each one."
+        }
+      ]
+    }
+  ]
+}

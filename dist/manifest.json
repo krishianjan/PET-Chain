@@ -1,0 +1,90 @@
+{
+  "manifest_version": 3,
+  "name": "PET — Prompt Enhancement Tool",
+  "version": "1.0.0",
+  "description": "Strategic prompt architect for any LLM",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://api.groq.com/*",
+    "https://api.openai.com/*",
+    "https://api.deepseek.com/*",
+    "https://api.perplexity.ai/*",
+    "http://localhost:11434/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://x.com/*",
+    "https://chat.deepseek.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/index.jsx-loader-db955547.js"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://x.com/*",
+        "https://chat.deepseek.com/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "assets/lottie/*.json",
+        "assets/lottie/*.webp",
+        "icons/*"
+      ],
+      "use_dynamic_url": false
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://x.com/*"
+      ],
+      "resources": [
+        "assets/metrics_store-e323fb81.js",
+        "assets/index.jsx-7357b256.js"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}
