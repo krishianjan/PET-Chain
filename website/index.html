@@ -1,28 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PET — Prompt Enhancement Tool</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --forest:    #1a3a2a;
-      --green:     #2d6a4f;
-      --leaf:      #52b788;
-      --mint:      #b7e4c7;
-      --bark:      #8c6b4a;
-      --honey:     #f8d276;
-      --sky:       #74c0e8;
-      --bg:        #f0f7ee;
-      --white:     #ffffff;
-      --text-dark: #0f2016;
-      --text-mid:  #3a5a42;
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    html { scroll-behavior: smooth; }
+    :root {
+      --forest: #1a3a2a;
+      --green: #2d6a4f;
+      --leaf: #52b788;
+      --mint: #b7e4c7;
+      --bark: #8c6b4a;
+      --honey: #f8d276;
+      --sky: #74c0e8;
+      --bg: #f0f7ee;
+      --white: #ffffff;
+      --text-dark: #0f2016;
+      --text-mid: #3a5a42;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
 
     body {
       font-family: 'Inter', system-ui, sans-serif;
@@ -39,920 +48,1700 @@
       pointer-events: none;
       z-index: 0;
       background-image:
-        radial-gradient(ellipse 120px 60px at 8% 15%, rgba(82,183,136,.07) 0%, transparent 70%),
-        radial-gradient(ellipse 80px 120px at 92% 25%, rgba(45,106,79,.06) 0%, transparent 70%),
-        radial-gradient(ellipse 100px 50px at 50% 60%, rgba(183,228,199,.08) 0%, transparent 70%),
-        radial-gradient(ellipse 60px 90px at 20% 80%, rgba(82,183,136,.05) 0%, transparent 70%),
-        radial-gradient(ellipse 90px 40px at 75% 90%, rgba(45,106,79,.06) 0%, transparent 70%);
+        radial-gradient(ellipse 120px 60px at 8% 15%, rgba(82, 183, 136, .07) 0%, transparent 70%),
+        radial-gradient(ellipse 80px 120px at 92% 25%, rgba(45, 106, 79, .06) 0%, transparent 70%),
+        radial-gradient(ellipse 100px 50px at 50% 60%, rgba(183, 228, 199, .08) 0%, transparent 70%),
+        radial-gradient(ellipse 60px 90px at 20% 80%, rgba(82, 183, 136, .05) 0%, transparent 70%),
+        radial-gradient(ellipse 90px 40px at 75% 90%, rgba(45, 106, 79, .06) 0%, transparent 70%);
     }
 
     /* ─── UTILITIES ────────────────────────────── */
-    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 24px; border-radius: 12px; font-weight: 600;
-      font-size: 15px; cursor: pointer; text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      text-decoration: none;
       transition: transform .2s, box-shadow .2s, background .2s;
       border: none;
     }
-    .btn:hover { transform: translateY(-2px); }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
     .btn-primary {
-      background: var(--leaf); color: var(--white);
-      box-shadow: 0 4px 18px rgba(82,183,136,.35);
+      background: var(--leaf);
+      color: var(--white);
+      box-shadow: 0 4px 18px rgba(82, 183, 136, .35);
     }
-    .btn-primary:hover { background: #3da874; box-shadow: 0 8px 28px rgba(82,183,136,.45); }
+
+    .btn-primary:hover {
+      background: #3da874;
+      box-shadow: 0 8px 28px rgba(82, 183, 136, .45);
+    }
+
     .btn-outline {
-      background: transparent; color: var(--white);
-      border: 2px solid rgba(255,255,255,.5);
+      background: transparent;
+      color: var(--white);
+      border: 2px solid rgba(255, 255, 255, .5);
     }
-    .btn-outline:hover { background: rgba(255,255,255,.12); border-color: var(--white); }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, .12);
+      border-color: var(--white);
+    }
+
     .btn-dark {
-      background: var(--forest); color: var(--white);
-      box-shadow: 0 4px 18px rgba(26,58,42,.3);
+      background: var(--forest);
+      color: var(--white);
+      box-shadow: 0 4px 18px rgba(26, 58, 42, .3);
     }
-    .btn-dark:hover { background: #0f2016; }
+
+    .btn-dark:hover {
+      background: #0f2016;
+    }
 
     .section-label {
-      display: inline-block; background: var(--mint);
-      color: var(--green); font-weight: 700; font-size: 12px;
-      letter-spacing: .1em; text-transform: uppercase;
-      padding: 4px 14px; border-radius: 999px; margin-bottom: 14px;
+      display: inline-block;
+      background: var(--mint);
+      color: var(--green);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 14px;
     }
+
     .section-title {
-      font-size: clamp(28px, 4vw, 42px); font-weight: 800;
-      color: var(--forest); line-height: 1.15; margin-bottom: 14px;
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      color: var(--forest);
+      line-height: 1.15;
+      margin-bottom: 14px;
     }
+
     .section-sub {
-      font-size: 17px; color: var(--text-mid); line-height: 1.7;
+      font-size: 17px;
+      color: var(--text-mid);
+      line-height: 1.7;
       max-width: 560px;
     }
 
     /* ─── NAV ──────────────────────────────────── */
     nav {
-      position: sticky; top: 0; z-index: 100;
+      position: sticky;
+      top: 0;
+      z-index: 100;
       backdrop-filter: blur(16px) saturate(160%);
-      background: rgba(240,247,238,.88);
-      border-bottom: 1px solid rgba(82,183,136,.18);
+      background: rgba(240, 247, 238, .88);
+      border-bottom: 1px solid rgba(82, 183, 136, .18);
     }
+
     .nav-inner {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       height: 64px;
     }
+
     .nav-logo {
-      font-size: 22px; font-weight: 800;
+      font-size: 22px;
+      font-weight: 800;
       background: linear-gradient(135deg, var(--green), var(--leaf));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; text-decoration: none; display: flex; align-items: center; gap: 8px;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .nav-links { display: flex; align-items: center; gap: 28px; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
     .nav-links a {
-      color: var(--text-mid); text-decoration: none; font-weight: 500;
-      font-size: 14px; transition: color .2s;
+      color: var(--text-mid);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: color .2s;
     }
-    .nav-links a:hover { color: var(--green); }
+
+    .nav-links a:hover {
+      color: var(--green);
+    }
 
     /* ─── HERO ─────────────────────────────────── */
     .hero {
-      position: relative; overflow: hidden;
+      position: relative;
+      overflow: hidden;
       background: linear-gradient(135deg, #0e2318 0%, var(--forest) 40%, #1f5238 80%, #163d28 100%);
       padding: 100px 0 110px;
     }
+
     /* dappled light */
     .hero::before {
       content: '';
-      position: absolute; inset: 0; pointer-events: none;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
       background:
-        radial-gradient(ellipse 500px 300px at 15% 20%, rgba(82,183,136,.12) 0%, transparent 70%),
-        radial-gradient(ellipse 300px 500px at 80% 80%, rgba(116,192,232,.09) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 200px at 90% 10%, rgba(248,210,118,.08) 0%, transparent 70%);
+        radial-gradient(ellipse 500px 300px at 15% 20%, rgba(82, 183, 136, .12) 0%, transparent 70%),
+        radial-gradient(ellipse 300px 500px at 80% 80%, rgba(116, 192, 232, .09) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 200px at 90% 10%, rgba(248, 210, 118, .08) 0%, transparent 70%);
     }
+
     /* floating leaf particles */
     .leaf-particle {
-      position: absolute; pointer-events: none;
-      font-size: 20px; opacity: .22;
+      position: absolute;
+      pointer-events: none;
+      font-size: 20px;
+      opacity: .22;
       animation: floatLeaf linear infinite;
     }
+
     @keyframes floatLeaf {
-      0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: .22; }
-      50%  { opacity: .32; }
-      100% { transform: translateY(-120px) rotate(180deg) scale(.7); opacity: 0; }
+      0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+        opacity: .22;
+      }
+
+      50% {
+        opacity: .32;
+      }
+
+      100% {
+        transform: translateY(-120px) rotate(180deg) scale(.7);
+        opacity: 0;
+      }
     }
 
     .hero-inner {
-      position: relative; z-index: 2;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
     }
+
     .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(82,183,136,.18); border: 1px solid rgba(82,183,136,.35);
-      border-radius: 999px; padding: 6px 16px; font-size: 13px;
-      color: var(--mint); font-weight: 600; margin-bottom: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(82, 183, 136, .18);
+      border: 1px solid rgba(82, 183, 136, .35);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 13px;
+      color: var(--mint);
+      font-weight: 600;
+      margin-bottom: 22px;
     }
+
     .hero-title {
-      font-size: clamp(36px, 5vw, 58px); font-weight: 800;
-      color: var(--white); line-height: 1.1; margin-bottom: 20px;
+      font-size: clamp(36px, 5vw, 58px);
+      font-weight: 800;
+      color: var(--white);
+      line-height: 1.1;
+      margin-bottom: 20px;
     }
+
     .hero-title span {
       background: linear-gradient(90deg, var(--leaf), var(--honey));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
+
     .hero-sub {
-      font-size: 17px; color: rgba(255,255,255,.72); line-height: 1.75;
-      margin-bottom: 36px; max-width: 500px;
+      font-size: 17px;
+      color: rgba(255, 255, 255, .72);
+      line-height: 1.75;
+      margin-bottom: 36px;
+      max-width: 500px;
     }
-    .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+
+    .hero-ctas {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
 
     /* pet card floating */
     .hero-card-wrap {
-      display: flex; justify-content: center; align-items: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
+
     .pet-float-card {
-      background: rgba(255,255,255,.07); backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,.15); border-radius: 24px;
-      padding: 28px; width: 340px;
-      box-shadow: 0 24px 64px rgba(0,0,0,.4);
+      background: rgba(255, 255, 255, .07);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, .15);
+      border-radius: 24px;
+      padding: 28px;
+      width: 340px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, .4);
       animation: cardFloat 4s ease-in-out infinite;
     }
+
     @keyframes cardFloat {
-      0%, 100% { transform: translateY(0px) rotate(-.5deg); }
-      50%       { transform: translateY(-16px) rotate(.5deg); }
+
+      0%,
+      100% {
+        transform: translateY(0px) rotate(-.5deg);
+      }
+
+      50% {
+        transform: translateY(-16px) rotate(.5deg);
+      }
     }
+
     .pet-display {
-      text-align: center; font-size: 64px; margin-bottom: 18px;
+      text-align: center;
+      font-size: 64px;
+      margin-bottom: 18px;
       animation: petCycle 8s step-end infinite;
     }
+
     @keyframes petCycle {
-      0%   { content: ''; }
+      0% {
+        content: '';
+      }
     }
-    .pet-emoji { display: inline-block; animation: petBounce 2s ease-in-out infinite; }
+
+    .pet-emoji {
+      display: inline-block;
+      animation: petBounce 2s ease-in-out infinite;
+    }
+
     @keyframes petBounce {
-      0%, 100% { transform: translateY(0) scale(1); }
-      40%      { transform: translateY(-8px) scale(1.05); }
-      60%      { transform: translateY(-4px) scale(1.02); }
+
+      0%,
+      100% {
+        transform: translateY(0) scale(1);
+      }
+
+      40% {
+        transform: translateY(-8px) scale(1.05);
+      }
+
+      60% {
+        transform: translateY(-4px) scale(1.02);
+      }
     }
+
     .card-tag {
-      display: inline-block; background: rgba(82,183,136,.25);
-      color: var(--mint); font-size: 11px; font-weight: 700;
-      letter-spacing: .08em; text-transform: uppercase;
-      padding: 3px 10px; border-radius: 6px; margin-bottom: 10px;
+      display: inline-block;
+      background: rgba(82, 183, 136, .25);
+      color: var(--mint);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
     }
+
     .card-original {
-      font-size: 13px; color: rgba(255,255,255,.5);
-      background: rgba(255,255,255,.06); border-radius: 10px;
-      padding: 10px 12px; margin-bottom: 10px; line-height: 1.5;
+      font-size: 13px;
+      color: rgba(255, 255, 255, .5);
+      background: rgba(255, 255, 255, .06);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      line-height: 1.5;
     }
-    .card-arrow { text-align: center; font-size: 18px; color: var(--leaf); margin: 6px 0; }
+
+    .card-arrow {
+      text-align: center;
+      font-size: 18px;
+      color: var(--leaf);
+      margin: 6px 0;
+    }
+
     .card-rewritten {
-      font-size: 13px; color: rgba(255,255,255,.88);
-      background: rgba(82,183,136,.15); border: 1px solid rgba(82,183,136,.3);
-      border-radius: 10px; padding: 10px 12px; line-height: 1.5;
+      font-size: 13px;
+      color: rgba(255, 255, 255, .88);
+      background: rgba(82, 183, 136, .15);
+      border: 1px solid rgba(82, 183, 136, .3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      line-height: 1.5;
     }
+
     .card-score {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       margin-top: 14px;
     }
+
     .score-badge {
       background: linear-gradient(135deg, var(--leaf), #3da874);
-      color: white; font-weight: 700; font-size: 14px;
-      padding: 4px 12px; border-radius: 999px;
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 999px;
     }
-    .score-label { color: rgba(255,255,255,.5); font-size: 12px; }
+
+    .score-label {
+      color: rgba(255, 255, 255, .5);
+      font-size: 12px;
+    }
 
     /* ─── STATS BAR ────────────────────────────── */
     .stats-bar {
       background: linear-gradient(90deg, #d8f0e4, #e8f7f0, #d8f0e4);
-      padding: 36px 0; position: relative; overflow: hidden;
+      padding: 36px 0;
+      position: relative;
+      overflow: hidden;
     }
+
     .stats-bar::before {
       content: '';
-      position: absolute; inset: 0;
-      background: repeating-linear-gradient(
-        90deg,
-        transparent,
-        transparent 40px,
-        rgba(82,183,136,.06) 40px,
-        rgba(82,183,136,.06) 41px
-      );
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(90deg,
+          transparent,
+          transparent 40px,
+          rgba(82, 183, 136, .06) 40px,
+          rgba(82, 183, 136, .06) 41px);
     }
+
     .stats-inner {
-      position: relative; z-index: 1;
-      display: flex; justify-content: center; gap: 80px; flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      gap: 80px;
+      flex-wrap: wrap;
     }
-    .stat-item { text-align: center; }
+
+    .stat-item {
+      text-align: center;
+    }
+
     .stat-num {
-      font-size: 36px; font-weight: 800; color: var(--forest);
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--forest);
       line-height: 1;
     }
-    .stat-label { font-size: 14px; color: var(--text-mid); margin-top: 6px; font-weight: 500; }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-mid);
+      margin-top: 6px;
+      font-weight: 500;
+    }
 
     /* ─── FEATURES ─────────────────────────────── */
-    .features { padding: 100px 0; }
-    .features-header { text-align: center; margin-bottom: 56px; }
-    .features-header .section-sub { margin: 0 auto; }
-    .features-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px;
+    .features {
+      padding: 100px 0;
     }
+
+    .features-header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .features-header .section-sub {
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
     .feature-card {
-      background: var(--white); border-radius: 20px;
-      padding: 32px 28px; position: relative; overflow: hidden;
-      border: 1px solid rgba(82,183,136,.15);
-      box-shadow: 0 4px 20px rgba(26,58,42,.06);
+      background: var(--white);
+      border-radius: 20px;
+      padding: 32px 28px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(82, 183, 136, .15);
+      box-shadow: 0 4px 20px rgba(26, 58, 42, .06);
       transition: transform .25s, box-shadow .25s;
     }
-    .feature-card:hover { transform: translateY(-6px); box-shadow: 0 12px 40px rgba(26,58,42,.13); }
+
+    .feature-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 40px rgba(26, 58, 42, .13);
+    }
+
     .feature-card::before {
       content: '';
-      position: absolute; top: -40px; right: -40px;
-      width: 120px; height: 120px;
-      background: radial-gradient(circle, rgba(82,183,136,.12) 0%, transparent 70%);
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(82, 183, 136, .12) 0%, transparent 70%);
       border-radius: 50%;
     }
+
     .feature-icon {
-      font-size: 40px; margin-bottom: 18px; display: block;
+      font-size: 40px;
+      margin-bottom: 18px;
+      display: block;
       transition: transform .3s;
     }
-    .feature-card:hover .feature-icon { transform: scale(1.2) rotate(-5deg); }
-    .feature-title {
-      font-size: 18px; font-weight: 700; color: var(--forest); margin-bottom: 10px;
+
+    .feature-card:hover .feature-icon {
+      transform: scale(1.2) rotate(-5deg);
     }
-    .feature-desc { font-size: 14px; color: var(--text-mid); line-height: 1.7; }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--forest);
+      margin-bottom: 10px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-mid);
+      line-height: 1.7;
+    }
+
     /* leaf accent bottom */
     .feature-card::after {
       content: '🌿';
-      position: absolute; bottom: 14px; right: 18px;
-      font-size: 22px; opacity: .18;
+      position: absolute;
+      bottom: 14px;
+      right: 18px;
+      font-size: 22px;
+      opacity: .18;
       transform: rotate(20deg);
     }
 
     /* ─── HOW IT WORKS ─────────────────────────── */
-    .how { padding: 100px 0; background: var(--forest); position: relative; overflow: hidden; }
+    .how {
+      padding: 100px 0;
+      background: var(--forest);
+      position: relative;
+      overflow: hidden;
+    }
+
     .how::before {
       content: '';
-      position: absolute; inset: 0;
+      position: absolute;
+      inset: 0;
       background:
-        radial-gradient(ellipse 600px 400px at 0% 100%, rgba(82,183,136,.1) 0%, transparent 70%),
-        radial-gradient(ellipse 400px 600px at 100% 0%, rgba(116,192,232,.08) 0%, transparent 70%);
+        radial-gradient(ellipse 600px 400px at 0% 100%, rgba(82, 183, 136, .1) 0%, transparent 70%),
+        radial-gradient(ellipse 400px 600px at 100% 0%, rgba(116, 192, 232, .08) 0%, transparent 70%);
     }
+
     /* vine line */
     .how::after {
       content: '';
-      position: absolute; top: 50%; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(82,183,136,.25), rgba(82,183,136,.4), rgba(82,183,136,.25), transparent);
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(82, 183, 136, .25), rgba(82, 183, 136, .4), rgba(82, 183, 136, .25), transparent);
     }
-    .how .container { position: relative; z-index: 2; }
-    .how .features-header { margin-bottom: 56px; }
-    .how .section-title { color: var(--white); }
-    .how .section-sub { color: rgba(255,255,255,.65); }
-    .how .section-label { background: rgba(82,183,136,.25); color: var(--mint); }
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px; }
+
+    .how .container {
+      position: relative;
+      z-index: 2;
+    }
+
+    .how .features-header {
+      margin-bottom: 56px;
+    }
+
+    .how .section-title {
+      color: var(--white);
+    }
+
+    .how .section-sub {
+      color: rgba(255, 255, 255, .65);
+    }
+
+    .how .section-label {
+      background: rgba(82, 183, 136, .25);
+      color: var(--mint);
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 28px;
+    }
+
     .step-card {
-      background: rgba(255,255,255,.06); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.1); border-radius: 20px;
-      padding: 36px 28px; position: relative; overflow: hidden;
+      background: rgba(255, 255, 255, .06);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 20px;
+      padding: 36px 28px;
+      position: relative;
+      overflow: hidden;
       transition: transform .25s, background .25s;
     }
-    .step-card:hover { transform: translateY(-6px); background: rgba(255,255,255,.1); }
-    .step-number {
-      position: absolute; top: 20px; right: 24px;
-      font-size: 72px; font-weight: 800; color: rgba(255,255,255,.05); line-height: 1;
+
+    .step-card:hover {
+      transform: translateY(-6px);
+      background: rgba(255, 255, 255, .1);
     }
-    .step-icon { font-size: 44px; margin-bottom: 18px; display: block; }
-    .step-card:hover .step-icon { animation: petBounce .6s ease-in-out; }
-    .step-title { font-size: 20px; font-weight: 700; color: var(--white); margin-bottom: 12px; }
-    .step-desc { font-size: 14px; color: rgba(255,255,255,.65); line-height: 1.75; }
+
+    .step-number {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      font-size: 72px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, .05);
+      line-height: 1;
+    }
+
+    .step-icon {
+      font-size: 44px;
+      margin-bottom: 18px;
+      display: block;
+    }
+
+    .step-card:hover .step-icon {
+      animation: petBounce .6s ease-in-out;
+    }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 12px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, .65);
+      line-height: 1.75;
+    }
 
     /* ─── DASHBOARD PREVIEW ────────────────────── */
-    .dash-preview { padding: 100px 0; }
-    .dash-preview .container { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+    .dash-preview {
+      padding: 100px 0;
+    }
+
+    .dash-preview .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
     .preview-mock {
-      background: var(--white); border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(26,58,42,.15);
-      overflow: hidden; border: 1px solid rgba(82,183,136,.15);
+      background: var(--white);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(26, 58, 42, .15);
+      overflow: hidden;
+      border: 1px solid rgba(82, 183, 136, .15);
     }
+
     .mock-topbar {
-      background: var(--forest); padding: 14px 20px;
-      display: flex; align-items: center; gap: 8px;
+      background: var(--forest);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    .mock-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
     .mock-tabs {
-      display: flex; gap: 0; border-bottom: 1px solid rgba(82,183,136,.2);
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid rgba(82, 183, 136, .2);
       background: #f8fbf9;
     }
+
     .mock-tab {
-      padding: 10px 18px; font-size: 13px; font-weight: 600;
-      color: var(--text-mid); cursor: pointer; border-bottom: 2px solid transparent;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-mid);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
     }
-    .mock-tab.active { color: var(--green); border-bottom-color: var(--green); }
-    .mock-body { padding: 20px; }
-    .mock-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
+
+    .mock-tab.active {
+      color: var(--green);
+      border-bottom-color: var(--green);
+    }
+
+    .mock-body {
+      padding: 20px;
+    }
+
+    .mock-stat-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
     .mock-stat {
-      flex: 1; background: var(--bg); border-radius: 10px;
-      padding: 12px; text-align: center;
+      flex: 1;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
     }
-    .mock-stat-num { font-size: 20px; font-weight: 800; color: var(--forest); }
-    .mock-stat-label { font-size: 10px; color: var(--text-mid); margin-top: 2px; }
-    .mock-chart { display: flex; align-items: flex-end; gap: 3px; height: 70px; padding: 0 4px; }
+
+    .mock-stat-num {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--forest);
+    }
+
+    .mock-stat-label {
+      font-size: 10px;
+      color: var(--text-mid);
+      margin-top: 2px;
+    }
+
+    .mock-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 70px;
+      padding: 0 4px;
+    }
+
     .mock-bar {
-      flex: 1; border-radius: 4px 4px 0 0;
+      flex: 1;
+      border-radius: 4px 4px 0 0;
       background: linear-gradient(180deg, var(--leaf), var(--green));
       min-height: 8px;
     }
-    .mock-chart-label { font-size: 10px; color: var(--text-mid); text-align: center; margin-top: 6px; }
+
+    .mock-chart-label {
+      font-size: 10px;
+      color: var(--text-mid);
+      text-align: center;
+      margin-top: 6px;
+    }
 
     /* ─── LLM SECTION ──────────────────────────── */
-    .llm { padding: 100px 0; background: linear-gradient(180deg, #e8f5ee, var(--bg)); }
-    .llm .features-header { margin-bottom: 56px; }
-    .llm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; }
-    .llm-card {
-      background: var(--white); border-radius: 20px; padding: 36px 28px;
-      border: 1px solid rgba(82,183,136,.15);
-      box-shadow: 0 4px 20px rgba(26,58,42,.06);
-      transition: transform .25s, box-shadow .25s;
-      position: relative; overflow: hidden;
+    .llm {
+      padding: 100px 0;
+      background: linear-gradient(180deg, #e8f5ee, var(--bg));
     }
-    .llm-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(26,58,42,.13); }
+
+    .llm .features-header {
+      margin-bottom: 56px;
+    }
+
+    .llm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 28px;
+    }
+
+    .llm-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 36px 28px;
+      border: 1px solid rgba(82, 183, 136, .15);
+      box-shadow: 0 4px 20px rgba(26, 58, 42, .06);
+      transition: transform .25s, box-shadow .25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .llm-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 16px 48px rgba(26, 58, 42, .13);
+    }
+
     .llm-card::before {
       content: '';
-      position: absolute; bottom: -30px; left: -30px;
-      width: 100px; height: 100px;
+      position: absolute;
+      bottom: -30px;
+      left: -30px;
+      width: 100px;
+      height: 100px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(82,183,136,.1) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(82, 183, 136, .1) 0%, transparent 70%);
     }
-    .llm-icon { font-size: 40px; margin-bottom: 16px; display: block; transition: transform .3s; }
-    .llm-card:hover .llm-icon { transform: scale(1.15) rotate(5deg); }
-    .llm-name { font-size: 20px; font-weight: 700; color: var(--forest); margin-bottom: 10px; }
-    .llm-desc { font-size: 14px; color: var(--text-mid); line-height: 1.7; }
+
+    .llm-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+      display: block;
+      transition: transform .3s;
+    }
+
+    .llm-card:hover .llm-icon {
+      transform: scale(1.15) rotate(5deg);
+    }
+
+    .llm-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--forest);
+      margin-bottom: 10px;
+    }
+
+    .llm-desc {
+      font-size: 14px;
+      color: var(--text-mid);
+      line-height: 1.7;
+    }
+
     .llm-bar {
-      margin-top: 18px; height: 6px; background: var(--mint);
-      border-radius: 999px; overflow: hidden;
+      margin-top: 18px;
+      height: 6px;
+      background: var(--mint);
+      border-radius: 999px;
+      overflow: hidden;
     }
-    .llm-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--leaf), var(--green)); }
+
+    .llm-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--leaf), var(--green));
+    }
 
     /* ─── ABOUT ─────────────────────────────────── */
-    .about { padding: 100px 0; background: var(--mint); }
-    .about-inner { display: grid; grid-template-columns: 340px 1fr; gap: 64px; align-items: center; }
-    .about-photo-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-    .about-photo {
-      width: 200px; height: 200px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--green), var(--forest));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 80px; box-shadow: 0 20px 60px rgba(45,106,79,.25);
-      border: 4px solid var(--white); transition: transform .3s;
+    .about {
+      padding: 100px 0;
+      background: var(--mint);
     }
-    .about-photo:hover { transform: scale(1.04) rotate(-2deg); }
-    .about-social { display: flex; gap: 12px; }
+
+    .about-inner {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .about-photo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .about-photo {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), var(--forest));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 80px;
+      box-shadow: 0 20px 60px rgba(45, 106, 79, .25);
+      border: 4px solid var(--white);
+      transition: transform .3s;
+    }
+
+    .about-photo:hover {
+      transform: scale(1.04) rotate(-2deg);
+    }
+
+    .about-social {
+      display: flex;
+      gap: 12px;
+    }
+
     .about-social a {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: var(--white); color: var(--forest); font-size: 16px;
-      display: flex; align-items: center; justify-content: center;
-      text-decoration: none; box-shadow: 0 4px 12px rgba(0,0,0,.08);
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--white);
+      color: var(--forest);
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
       transition: transform .2s, box-shadow .2s;
     }
-    .about-social a:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.14); }
-    .about-content .section-label { margin-bottom: 14px; display: inline-flex; }
-    .about-name { font-size: 36px; font-weight: 800; color: var(--forest); margin: 0 0 6px; }
-    .about-role { font-size: 16px; color: var(--green); font-weight: 600; margin: 0 0 20px; }
-    .about-bio { font-size: 16px; color: #3d5a4a; line-height: 1.8; margin-bottom: 28px; }
-    .about-book {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: var(--forest); color: var(--white); font-weight: 700;
-      font-size: 15px; padding: 14px 28px; border-radius: 999px;
-      text-decoration: none; transition: transform .2s, box-shadow .2s;
-      box-shadow: 0 8px 24px rgba(45,106,79,.3);
+
+    .about-social a:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, .14);
     }
-    .about-book:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(45,106,79,.4); }
-    @media(max-width:768px){
-      .about-inner { grid-template-columns: 1fr; text-align: center; }
-      .about-photo-wrap { margin: 0 auto; }
-      .about-social { justify-content: center; }
-      .about-book { width: 100%; justify-content: center; }
+
+    .about-content .section-label {
+      margin-bottom: 14px;
+      display: inline-flex;
+    }
+
+    .about-name {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--forest);
+      margin: 0 0 6px;
+    }
+
+    .about-role {
+      font-size: 16px;
+      color: var(--green);
+      font-weight: 600;
+      margin: 0 0 20px;
+    }
+
+    .about-bio {
+      font-size: 16px;
+      color: #3d5a4a;
+      line-height: 1.8;
+      margin-bottom: 28px;
+    }
+
+    .about-book {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--forest);
+      color: var(--white);
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 8px 24px rgba(45, 106, 79, .3);
+    }
+
+    .about-book:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(45, 106, 79, .4);
+    }
+
+    @media(max-width:768px) {
+      .about-inner {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .about-photo-wrap {
+        margin: 0 auto;
+      }
+
+      .about-social {
+        justify-content: center;
+      }
+
+      .about-book {
+        width: 100%;
+        justify-content: center;
+      }
     }
 
     /* ─── INSTALL GUIDE ──────────────────────────── */
-    .install { padding: 72px 0; background: #fff; }
-    .install-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-    .install-steps { display: flex; flex-direction: column; gap: 20px; }
-    .install-step { display: flex; gap: 16px; align-items: flex-start; }
-    .install-num {
-      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-      background: var(--green); color: var(--white); font-weight: 800; font-size: 14px;
-      display: flex; align-items: center; justify-content: center;
+    .install {
+      padding: 72px 0;
+      background: #fff;
     }
-    .install-step-text strong { display: block; font-size: 15px; color: var(--forest); margin-bottom: 4px; }
-    .install-step-text p { font-size: 13px; color: #6b7280; margin: 0; line-height: 1.6; }
+
+    .install-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .install-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .install-step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .install-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--green);
+      color: var(--white);
+      font-weight: 800;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .install-step-text strong {
+      display: block;
+      font-size: 15px;
+      color: var(--forest);
+      margin-bottom: 4px;
+    }
+
+    .install-step-text p {
+      font-size: 13px;
+      color: #6b7280;
+      margin: 0;
+      line-height: 1.6;
+    }
+
     .install-download {
       background: linear-gradient(135deg, var(--forest), var(--green));
-      border-radius: 24px; padding: 40px; color: var(--white); text-align: center;
+      border-radius: 24px;
+      padding: 40px;
+      color: var(--white);
+      text-align: center;
     }
-    .install-download h3 { font-size: 22px; font-weight: 800; margin: 0 0 10px; }
-    .install-download p { font-size: 14px; opacity: .8; margin: 0 0 24px; line-height: 1.6; }
+
+    .install-download h3 {
+      font-size: 22px;
+      font-weight: 800;
+      margin: 0 0 10px;
+    }
+
+    .install-download p {
+      font-size: 14px;
+      opacity: .8;
+      margin: 0 0 24px;
+      line-height: 1.6;
+    }
+
     .download-btn {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: var(--white); color: var(--forest); font-weight: 700; font-size: 15px;
-      padding: 14px 28px; border-radius: 999px; text-decoration: none;
-      transition: transform .2s; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--white);
+      color: var(--forest);
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      transition: transform .2s;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .15);
     }
-    .download-btn:hover { transform: translateY(-2px); }
-    @media(max-width:768px){
-      .install-inner { grid-template-columns: 1fr; }
+
+    .download-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    @media(max-width:768px) {
+      .install-inner {
+        grid-template-columns: 1fr;
+      }
     }
 
     /* ─── COMING SOON ──────────────────────────── */
-    .coming { padding: 100px 0; background: var(--forest); position: relative; overflow: hidden; }
+    .coming {
+      padding: 100px 0;
+      background: var(--forest);
+      position: relative;
+      overflow: hidden;
+    }
+
     .coming::before {
       content: '';
-      position: absolute; inset: 0;
+      position: absolute;
+      inset: 0;
       background:
-        radial-gradient(ellipse 800px 400px at 50% 0%, rgba(82,183,136,.08) 0%, transparent 70%);
+        radial-gradient(ellipse 800px 400px at 50% 0%, rgba(82, 183, 136, .08) 0%, transparent 70%);
     }
-    .coming .container { position: relative; z-index: 2; }
-    .coming .features-header { margin-bottom: 56px; }
-    .coming .section-title { color: var(--white); }
-    .coming .section-sub { color: rgba(255,255,255,.6); }
-    .coming .section-label { background: rgba(248,210,118,.2); color: var(--honey); }
-    .coming-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+
+    .coming .container {
+      position: relative;
+      z-index: 2;
+    }
+
+    .coming .features-header {
+      margin-bottom: 56px;
+    }
+
+    .coming .section-title {
+      color: var(--white);
+    }
+
+    .coming .section-sub {
+      color: rgba(255, 255, 255, .6);
+    }
+
+    .coming .section-label {
+      background: rgba(248, 210, 118, .2);
+      color: var(--honey);
+    }
+
+    .coming-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
     .coming-card {
-      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 20px; padding: 30px 24px; position: relative;
-      opacity: .82; transition: opacity .25s, transform .25s;
+      background: rgba(255, 255, 255, .05);
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 20px;
+      padding: 30px 24px;
+      position: relative;
+      opacity: .82;
+      transition: opacity .25s, transform .25s;
     }
-    .coming-card:hover { opacity: 1; transform: translateY(-4px); }
+
+    .coming-card:hover {
+      opacity: 1;
+      transform: translateY(-4px);
+    }
+
     .coming-badge {
-      position: absolute; top: 16px; right: 16px;
-      background: rgba(248,210,118,.2); color: var(--honey);
-      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-      padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(248,210,118,.3);
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(248, 210, 118, .2);
+      color: var(--honey);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(248, 210, 118, .3);
     }
-    .coming-icon { font-size: 36px; margin-bottom: 14px; display: block; }
-    .coming-title { font-size: 17px; font-weight: 700; color: var(--white); margin-bottom: 10px; }
-    .coming-desc { font-size: 14px; color: rgba(255,255,255,.55); line-height: 1.7; }
+
+    .coming-icon {
+      font-size: 36px;
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    .coming-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 10px;
+    }
+
+    .coming-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, .55);
+      line-height: 1.7;
+    }
 
     /* ─── FOOTER ───────────────────────────────── */
     footer {
-      background: #0a1c12; padding: 60px 0 32px;
-      position: relative; overflow: hidden;
+      background: #0a1c12;
+      padding: 60px 0 32px;
+      position: relative;
+      overflow: hidden;
     }
+
     footer::before {
       content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
       background: linear-gradient(90deg, transparent, var(--leaf), var(--honey), var(--leaf), transparent);
     }
+
     .footer-inner {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      gap: 40px; flex-wrap: wrap; margin-bottom: 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 40px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
     }
-    .footer-brand .nav-logo { margin-bottom: 10px; display: inline-flex; }
-    .footer-tagline { font-size: 14px; color: rgba(255,255,255,.45); max-width: 240px; line-height: 1.6; }
-    .footer-links { display: flex; flex-direction: column; gap: 10px; }
+
+    .footer-brand .nav-logo {
+      margin-bottom: 10px;
+      display: inline-flex;
+    }
+
+    .footer-tagline {
+      font-size: 14px;
+      color: rgba(255, 255, 255, .45);
+      max-width: 240px;
+      line-height: 1.6;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     .footer-links a {
-      color: rgba(255,255,255,.55); text-decoration: none; font-size: 14px; font-weight: 500;
+      color: rgba(255, 255, 255, .55);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
       transition: color .2s;
     }
-    .footer-links a:hover { color: var(--leaf); }
-    .footer-bottom {
-      border-top: 1px solid rgba(255,255,255,.08);
-      padding-top: 24px;
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+
+    .footer-links a:hover {
+      color: var(--leaf);
     }
-    .footer-copy { font-size: 13px; color: rgba(255,255,255,.35); }
-    .footer-legal { display: flex; gap: 20px; }
-    .footer-legal a { font-size: 13px; color: rgba(255,255,255,.35); text-decoration: none; }
-    .footer-legal a:hover { color: var(--leaf); }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(255, 255, 255, .08);
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .footer-copy {
+      font-size: 13px;
+      color: rgba(255, 255, 255, .35);
+    }
+
+    .footer-legal {
+      display: flex;
+      gap: 20px;
+    }
+
+    .footer-legal a {
+      font-size: 13px;
+      color: rgba(255, 255, 255, .35);
+      text-decoration: none;
+    }
+
+    .footer-legal a:hover {
+      color: var(--leaf);
+    }
 
     /* ─── RESPONSIVE ───────────────────────────── */
     @media (max-width: 768px) {
-      .hero-inner { grid-template-columns: 1fr; gap: 40px; }
-      .hero-card-wrap { justify-content: flex-start; }
-      .pet-float-card { width: 100%; max-width: 360px; }
-      .nav-links { display: none; }
-      .dash-preview .container { grid-template-columns: 1fr; }
-      .stats-inner { gap: 36px; }
+      .hero-inner {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .hero-card-wrap {
+        justify-content: flex-start;
+      }
+
+      .pet-float-card {
+        width: 100%;
+        max-width: 360px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .dash-preview .container {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-inner {
+        gap: 36px;
+      }
     }
   </style>
 </head>
+
 <body>
 
-<!-- leaf particles injected by JS -->
+  <!-- leaf particles injected by JS -->
 
-<!-- ─────────── NAV ─────────── -->
-<nav>
-  <div class="container nav-inner">
-    <a href="index.html" class="nav-logo">🌿 PET</a>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#how">How it works</a>
-      <a href="dashboard.html">Dashboard</a>
-      <a href="#coming">Coming Soon</a>
-      <a href="#about">About</a>
-    </div>
-    <a href="#install" class="btn btn-primary" style="padding:10px 20px;font-size:14px;">Download — Free</a>
-  </div>
-</nav>
-
-<!-- ─────────── HERO ─────────── -->
-<section class="hero" id="hero">
-  <div id="leaf-container"></div>
-  <div class="container hero-inner">
-    <div class="hero-left">
-      <div class="hero-badge">🌱 Now live on Chrome Web Store</div>
-      <h1 class="hero-title">Your AI Pet That Makes Every <span>Prompt Count</span></h1>
-      <p class="hero-sub">Meet your personal prompt engineering companion. Write smarter prompts, score AI responses, and track your growth — right inside ChatGPT, Claude, and Gemini.</p>
-      <div class="hero-ctas">
-        <a href="#install" class="btn btn-primary" style="font-size:16px;padding:14px 28px;">🐾 Download Free (v4.0)</a>
-        <a href="dashboard.html" class="btn btn-outline" style="font-size:16px;padding:14px 28px;">See the Dashboard →</a>
+  <!-- ─────────── NAV ─────────── -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">🌿 PET</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="#coming">Coming Soon</a>
+        <a href="#about">About</a>
       </div>
+      <a href="#install" class="btn btn-primary" style="padding:10px 20px;font-size:14px;">Download — Free</a>
     </div>
-    <div class="hero-card-wrap">
-      <div class="pet-float-card">
-        <div class="pet-display"><span class="pet-emoji" id="heroPet">🐕</span></div>
-        <div class="card-tag">✨ Rewriting your prompt…</div>
-        <div class="card-original">"explain machine learning to me"</div>
-        <div class="card-arrow">⬇</div>
-        <div class="card-rewritten">"You are an expert ML educator. Using the Feynman Technique, explain machine learning in 5 progressive steps — starting from analogies, building to math intuition, ending with a real-world example in healthcare. Include 2 follow-up questions to check comprehension."</div>
-        <div class="card-score">
-          <span class="score-label">Response quality</span>
-          <span class="score-badge">Score: 89/100 🏆</span>
+  </nav>
+
+  <!-- ─────────── HERO ─────────── -->
+  <section class="hero" id="hero">
+    <div id="leaf-container"></div>
+    <div class="container hero-inner">
+      <div class="hero-left">
+        <div class="hero-badge">🌱 Now live on Chrome Web Store</div>
+        <h1 class="hero-title">Your AI Pet That Makes Every <span>Prompt Count</span></h1>
+        <p class="hero-sub">Meet your personal prompt engineering companion. Write smarter prompts, score AI responses,
+          and track your growth — right inside ChatGPT, Claude, and Gemini.</p>
+        <div class="hero-ctas">
+          <a href="#install" class="btn btn-primary" style="font-size:16px;padding:14px 28px;">🐾 Download Free
+            (v4.0)</a>
+          <a href="dashboard.html" class="btn btn-outline" style="font-size:16px;padding:14px 28px;">See the Dashboard
+            →</a>
         </div>
       </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── STATS BAR ─────────── -->
-<div class="stats-bar">
-  <div class="container stats-inner">
-    <div class="stat-item">
-      <div class="stat-num">10,000+</div>
-      <div class="stat-label">Prompts Rewritten</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">2.5M+</div>
-      <div class="stat-label">Tokens Saved</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">4</div>
-      <div class="stat-label">Platforms Supported</div>
-    </div>
-  </div>
-</div>
-
-<!-- ─────────── FEATURES ─────────── -->
-<section class="features" id="features">
-  <div class="container">
-    <div class="features-header">
-      <div class="section-label">Features</div>
-      <h2 class="section-title">Everything your prompts need to thrive</h2>
-      <p class="section-sub">PET brings real prompt engineering techniques to every conversation — no manual effort required.</p>
-    </div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <span class="feature-icon">🐾</span>
-        <div class="feature-title">Smart Rewrite</div>
-        <p class="feature-desc">Transforms vague prompts into 40+ line strategic prompts using Chain-of-Thought, Few-Shot, Socratic Method, and more — instantly.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">📊</span>
-        <div class="feature-title">Response Scoring</div>
-        <p class="feature-desc">Every AI response gets scored 0–100. See exactly what was covered, what was missed, and how to ask better next time.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🌿</span>
-        <div class="feature-title">Insight Dashboard</div>
-        <p class="feature-desc">Track your prompt quality over time. See which techniques work best for your topics and how much you've improved.</p>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🤖</span>
-        <div class="feature-title">Multi-LLM Support</div>
-        <p class="feature-desc">Works seamlessly on ChatGPT, Claude, Gemini, and DeepSeek. One pet, all your AI tools.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── HOW IT WORKS ─────────── -->
-<section class="how" id="how">
-  <div class="container">
-    <div class="features-header" style="text-align:center;">
-      <div class="section-label">How it works</div>
-      <h2 class="section-title">From rough idea to polished prompt in seconds</h2>
-      <p class="section-sub" style="color:rgba(255,255,255,.6);margin:0 auto;">Three simple steps — your pet handles the prompt engineering so you don't have to.</p>
-    </div>
-    <div class="steps">
-      <div class="step-card">
-        <div class="step-number">1</div>
-        <span class="step-icon">🐕</span>
-        <div class="step-title">Meet Your Pet</div>
-        <p class="step-desc">Install the extension, pick your pet companion. It lives quietly in the corner of your screen — always ready, never intrusive.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-number">2</div>
-        <span class="step-icon">✏️</span>
-        <div class="step-title">Type & Rewrite</div>
-        <p class="step-desc">Write your rough idea in the chat. Click Rewrite and PET generates 3 expert-crafted prompts using real prompt engineering techniques.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-number">3</div>
-        <span class="step-icon">📈</span>
-        <div class="step-title">Score & Improve</div>
-        <p class="step-desc">After the AI responds, click Score. PET grades the response and suggests the perfect follow-up. Watch your scores climb over time.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── DASHBOARD PREVIEW ─────────── -->
-<section class="dash-preview" id="dashboard-preview">
-  <div class="container">
-    <div>
-      <div class="section-label">Dashboard</div>
-      <h2 class="section-title">Full Insights. Per Model.<br>One Dashboard.</h2>
-      <p class="section-sub">Track every session across ChatGPT, Claude, and Gemini. Understand your growth, your habits, and where to improve next.</p>
-      <div style="margin-top:32px; display:flex; gap:14px; flex-wrap:wrap;">
-        <a href="dashboard.html" class="btn btn-dark">View Full Dashboard →</a>
-      </div>
-    </div>
-    <div class="preview-mock">
-      <div class="mock-topbar">
-        <div class="mock-dot" style="background:#ff5f57;"></div>
-        <div class="mock-dot" style="background:#febc2e;"></div>
-        <div class="mock-dot" style="background:#28c840;"></div>
-        <span style="color:rgba(255,255,255,.4);font-size:12px;margin-left:8px;">PET Dashboard</span>
-      </div>
-      <div class="mock-tabs">
-        <div class="mock-tab active">GPT</div>
-        <div class="mock-tab">Claude</div>
-        <div class="mock-tab">Gemini</div>
-        <div class="mock-tab">Combined</div>
-      </div>
-      <div class="mock-body">
-        <div class="mock-stat-row">
-          <div class="mock-stat">
-            <div class="mock-stat-num" style="color:var(--green);">73%</div>
-            <div class="mock-stat-label">Avg Score</div>
-          </div>
-          <div class="mock-stat">
-            <div class="mock-stat-num">142</div>
-            <div class="mock-stat-label">Rewrites</div>
-          </div>
-          <div class="mock-stat">
-            <div class="mock-stat-num">38</div>
-            <div class="mock-stat-label">Sessions</div>
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text-mid);margin-bottom:6px;font-weight:600;">Score History (last 20 sessions)</div>
-        <div class="mock-chart" id="previewChart"></div>
-        <div class="mock-chart-label">Scores improving over time ↑</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── LLM PERFORMANCE ─────────── -->
-<section class="llm" id="llm">
-  <div class="container">
-    <div class="features-header" style="text-align:center;">
-      <div class="section-label">Performance by Model</div>
-      <h2 class="section-title">Know your AI. Master your prompts.</h2>
-      <p class="section-sub" style="margin:0 auto;">Different LLMs respond to different prompt styles. PET tracks what works where — so you always know the best approach.</p>
-    </div>
-    <div class="llm-grid">
-      <div class="llm-card">
-        <span class="llm-icon">🤖</span>
-        <div class="llm-name">ChatGPT</div>
-        <p class="llm-desc">Track how your prompts perform on GPT-4 and GPT-4o. See score trends and technique effectiveness session by session.</p>
-        <div class="llm-bar"><div class="llm-bar-fill" style="width:71%;"></div></div>
-        <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 71%</div>
-      </div>
-      <div class="llm-card">
-        <span class="llm-icon">🟣</span>
-        <div class="llm-name">Claude</div>
-        <p class="llm-desc">Measure response quality on Claude 3.5 and Claude Opus. Understand which prompt styles work best for long-form reasoning.</p>
-        <div class="llm-bar"><div class="llm-bar-fill" style="width:78%;"></div></div>
-        <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 78%</div>
-      </div>
-      <div class="llm-card">
-        <span class="llm-icon">💎</span>
-        <div class="llm-name">Gemini</div>
-        <p class="llm-desc">Monitor your Gemini interactions with session-by-session insights and improvement tracking across all flash and pro models.</p>
-        <div class="llm-bar"><div class="llm-bar-fill" style="width:68%;"></div></div>
-        <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 68%</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── COMING SOON ─────────── -->
-<section class="coming" id="coming">
-  <div class="container">
-    <div class="features-header" style="text-align:center;">
-      <div class="section-label">Coming Soon</div>
-      <h2 class="section-title">The forest keeps growing</h2>
-      <p class="section-sub" style="color:rgba(255,255,255,.6);margin:0 auto;">PET is just getting started. Here's what's coming to your pet's toolkit.</p>
-    </div>
-    <div class="coming-grid">
-      <div class="coming-card">
-        <span class="coming-badge">Coming Soon</span>
-        <span class="coming-icon">🪙</span>
-        <div class="coming-title">Token Tracker</div>
-        <p class="coming-desc">PET will show your remaining API tokens in real-time so you never run out mid-conversation. Budget smarter, prompt harder.</p>
-      </div>
-      <div class="coming-card">
-        <span class="coming-badge">Coming Soon</span>
-        <span class="coming-icon">📝</span>
-        <div class="coming-title">Form Auto-Fill Agent</div>
-        <p class="coming-desc">Give PET your details once. It auto-fills job applications, forms, and registration pages across the web — no repetition.</p>
-      </div>
-      <div class="coming-card">
-        <span class="coming-badge">Coming Soon</span>
-        <span class="coming-icon">🧭</span>
-        <div class="coming-title">Learning Path</div>
-        <p class="coming-desc">Based on your prompt history, PET curates what you've already mastered and what to study next — a truly personalized path.</p>
-      </div>
-      <div class="coming-card">
-        <span class="coming-badge">Coming Soon</span>
-        <span class="coming-icon">⌨️</span>
-        <div class="coming-title">Claude Code Agent</div>
-        <p class="coming-desc">Full terminal-integrated agent launching soon — PET comes to your development workflow with code-aware prompt enhancement.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── ABOUT ─────────── -->
-<!-- ✏️  EDIT THIS SECTION with your own info before pushing -->
-<section class="about" id="about">
-  <div class="container">
-    <div class="about-inner">
-      <div class="about-photo-wrap">
-        <!-- Replace the emoji below with an <img> tag pointing to your photo if you have one -->
-        <!-- e.g. <img src="assets/founder.jpg" style="width:200px;height:200px;border-radius:50%;object-fit:cover;"> -->
-        <div class="about-photo">🧑‍💻</div>
-        <div class="about-social">
-          <!-- ✏️ Replace # with your actual URLs -->
-          <a href="#" title="GitHub">🐙</a>
-          <a href="#" title="LinkedIn">💼</a>
-          <a href="#" title="Twitter / X">🐦</a>
-        </div>
-      </div>
-      <div class="about-content">
-        <span class="section-label">👋 The Builder</span>
-        <!-- ✏️ Replace with your name -->
-        <h2 class="about-name">Krishianjan Lanka</h2>
-        <!-- ✏️ Replace with your title/role -->
-        <p class="about-role">Founder · Prompt Engineer · AI Builder</p>
-        <!-- ✏️ Replace with your bio (2-3 sentences) -->
-        <p class="about-bio">
-          I built PET because I got tired of writing vague prompts and getting mediocre AI responses.
-          PET is my attempt to make prompt engineering accessible to everyone — not just ML researchers.
-          If you're getting less than 70% scores on your AI responses, let's fix that together.
-        </p>
-        <!-- ✏️ Replace the href with your Calendly / Cal.com / Tidycal booking link -->
-        <a class="about-book" href="#" target="_blank" rel="noopener">
-          📅 Book a Call — Let's Talk AI
-        </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────── INSTALL GUIDE ─────────── -->
-<section class="install" id="install">
-  <div class="container">
-    <div class="features-header" style="margin-bottom:48px;">
-      <span class="section-label">🔧 Install in 60 Seconds</span>
-      <h2 class="section-title">No Chrome Store. No Waiting. Completely Free.</h2>
-      <p class="section-sub">PET installs directly from GitHub. No $5 fee, no approval wait.</p>
-    </div>
-    <div class="install-inner">
-      <div class="install-steps">
-        <div class="install-step">
-          <div class="install-num">1</div>
-          <div class="install-step-text">
-            <strong>Download the extension ZIP</strong>
-            <p>Click the download button → save <code>pet-extension.zip</code> anywhere on your computer.</p>
-          </div>
-        </div>
-        <div class="install-step">
-          <div class="install-num">2</div>
-          <div class="install-step-text">
-            <strong>Unzip the file</strong>
-            <p>Extract the ZIP. You'll get a <code>dist/</code> folder — that's the extension.</p>
-          </div>
-        </div>
-        <div class="install-step">
-          <div class="install-num">3</div>
-          <div class="install-step-text">
-            <strong>Open Chrome Extensions</strong>
-            <p>Go to <code>chrome://extensions</code> in your browser and enable <strong>Developer Mode</strong> (top-right toggle).</p>
-          </div>
-        </div>
-        <div class="install-step">
-          <div class="install-num">4</div>
-          <div class="install-step-text">
-            <strong>Load the dist/ folder</strong>
-            <p>Click <strong>"Load unpacked"</strong> and select the <code>dist/</code> folder you extracted. Done — your pet appears! 🐾</p>
+      <div class="hero-card-wrap">
+        <div class="pet-float-card">
+          <div class="pet-display"><span class="pet-emoji" id="heroPet">🐕</span></div>
+          <div class="card-tag">✨ Rewriting your prompt…</div>
+          <div class="card-original">"explain machine learning to me"</div>
+          <div class="card-arrow">⬇</div>
+          <div class="card-rewritten">"You are an expert ML educator. Using the Feynman Technique, explain machine
+            learning in 5 progressive steps starting from analogies, building to math intuition, ending with a
+            real-world example in healthcare. Include 2 follow-up questions to check comprehension."</div>
+          <div class="card-score">
+            <span class="score-label">Response quality</span>
+            <span class="score-badge">Score: 89/100 🏆</span>
           </div>
         </div>
       </div>
-      <div class="install-download">
-        <div style="font-size:52px;margin-bottom:16px;">🐾</div>
-        <h3>PET v4.0 — Free Download</h3>
-        <p>Works on ChatGPT · Claude · Gemini · DeepSeek<br>No account needed to get started</p>
-        <!-- ✏️ After your first GitHub Release, replace # with the release ZIP URL:
+    </div>
+  </section>
+
+  <!-- ─────────── STATS BAR ─────────── -->
+  <div class="stats-bar">
+    <div class="container stats-inner">
+      <div class="stat-item">
+        <div class="stat-num">10,000+</div>
+        <div class="stat-label">Prompts Rewritten</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">2.5M+</div>
+        <div class="stat-label">Tokens Saved</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">4</div>
+        <div class="stat-label">Platforms Supported</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── FEATURES ─────────── -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="features-header">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything your prompts need to thrive</h2>
+        <p class="section-sub">PET brings real prompt engineering techniques to every conversation no manual effort
+          required.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">🐾</span>
+          <div class="feature-title">Smart Rewrite</div>
+          <p class="feature-desc">Transforms vague prompts into 40+ line strategic prompts using Chain-of-Thought,
+            Few-Shot, Socratic Method, and more instantly.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📊</span>
+          <div class="feature-title">Response Scoring</div>
+          <p class="feature-desc">Every AI response gets scored 0–100. See exactly what was covered, what was missed,
+            and how to ask better next time.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🌿</span>
+          <div class="feature-title">Insight Dashboard</div>
+          <p class="feature-desc">Track your prompt quality over time. See which techniques work best for your topics
+            and how much you've improved.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🤖</span>
+          <div class="feature-title">Multi-LLM Support</div>
+          <p class="feature-desc">Works seamlessly on ChatGPT, Claude, Gemini, and DeepSeek. One pet, all your AI tools.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── HOW IT WORKS ─────────── -->
+  <section class="how" id="how">
+    <div class="container">
+      <div class="features-header" style="text-align:center;">
+        <div class="section-label">How it works</div>
+        <h2 class="section-title">From rough idea to polished prompt in seconds</h2>
+        <p class="section-sub" style="color:rgba(255,255,255,.6);margin:0 auto;">Three simple steps — your pet handles
+          the prompt engineering so you don't have to.</p>
+      </div>
+      <div class="steps">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <span class="step-icon">🐕</span>
+          <div class="step-title">Meet Your Pet</div>
+          <p class="step-desc">Install the extension, pick your pet companion. It lives quietly in the corner of your
+            screen — always ready, never intrusive.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <span class="step-icon">✏️</span>
+          <div class="step-title">Type & Rewrite</div>
+          <p class="step-desc">Write your rough idea in the chat. Click Rewrite and PET generates 3 expert-crafted
+            prompts using real prompt engineering techniques.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <span class="step-icon">📈</span>
+          <div class="step-title">Score & Improve</div>
+          <p class="step-desc">After the AI responds, click Score. PET grades the response and suggests the perfect
+            follow-up. Watch your scores climb over time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── DASHBOARD PREVIEW ─────────── -->
+  <section class="dash-preview" id="dashboard-preview">
+    <div class="container">
+      <div>
+        <div class="section-label">Dashboard</div>
+        <h2 class="section-title">Full Insights. Per Model.<br>One Dashboard.</h2>
+        <p class="section-sub">Track every session across ChatGPT, Claude, and Gemini. Understand your growth, your
+          habits, and where to improve next.</p>
+        <div style="margin-top:32px; display:flex; gap:14px; flex-wrap:wrap;">
+          <a href="dashboard.html" class="btn btn-dark">View Full Dashboard →</a>
+        </div>
+      </div>
+      <div class="preview-mock">
+        <div class="mock-topbar">
+          <div class="mock-dot" style="background:#ff5f57;"></div>
+          <div class="mock-dot" style="background:#febc2e;"></div>
+          <div class="mock-dot" style="background:#28c840;"></div>
+          <span style="color:rgba(255,255,255,.4);font-size:12px;margin-left:8px;">PET Dashboard</span>
+        </div>
+        <div class="mock-tabs">
+          <div class="mock-tab active">GPT</div>
+          <div class="mock-tab">Claude</div>
+          <div class="mock-tab">Gemini</div>
+          <div class="mock-tab">Combined</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-stat-row">
+            <div class="mock-stat">
+              <div class="mock-stat-num" style="color:var(--green);">73%</div>
+              <div class="mock-stat-label">Avg Score</div>
+            </div>
+            <div class="mock-stat">
+              <div class="mock-stat-num">142</div>
+              <div class="mock-stat-label">Rewrites</div>
+            </div>
+            <div class="mock-stat">
+              <div class="mock-stat-num">38</div>
+              <div class="mock-stat-label">Sessions</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-mid);margin-bottom:6px;font-weight:600;">Score History (last 20
+            sessions)</div>
+          <div class="mock-chart" id="previewChart"></div>
+          <div class="mock-chart-label">Scores improving over time ↑</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── LLM PERFORMANCE ─────────── -->
+  <section class="llm" id="llm">
+    <div class="container">
+      <div class="features-header" style="text-align:center;">
+        <div class="section-label">Performance by Model</div>
+        <h2 class="section-title">Know your AI. Master your prompts.</h2>
+        <p class="section-sub" style="margin:0 auto;">Different LLMs respond to different prompt styles. PET tracks what
+          works where — so you always know the best approach.</p>
+      </div>
+      <div class="llm-grid">
+        <div class="llm-card">
+          <span class="llm-icon">🤖</span>
+          <div class="llm-name">ChatGPT</div>
+          <p class="llm-desc">Track how your prompts perform on GPT-4 and GPT-4o. See score trends and technique
+            effectiveness session by session.</p>
+          <div class="llm-bar">
+            <div class="llm-bar-fill" style="width:71%;"></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 71%</div>
+        </div>
+        <div class="llm-card">
+          <span class="llm-icon">🟣</span>
+          <div class="llm-name">Claude</div>
+          <p class="llm-desc">Measure response quality on Claude 3.5 and Claude Opus. Understand which prompt styles
+            work best for long-form reasoning.</p>
+          <div class="llm-bar">
+            <div class="llm-bar-fill" style="width:78%;"></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 78%</div>
+        </div>
+        <div class="llm-card">
+          <span class="llm-icon">💎</span>
+          <div class="llm-name">Gemini</div>
+          <p class="llm-desc">Monitor your Gemini interactions with session-by-session insights and improvement tracking
+            across all flash and pro models.</p>
+          <div class="llm-bar">
+            <div class="llm-bar-fill" style="width:68%;"></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-mid);margin-top:6px;">Avg score: 68%</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── COMING SOON ─────────── -->
+  <section class="coming" id="coming">
+    <div class="container">
+      <div class="features-header" style="text-align:center;">
+        <div class="section-label">Coming Soon</div>
+        <h2 class="section-title">The forest keeps growing</h2>
+        <p class="section-sub" style="color:rgba(255,255,255,.6);margin:0 auto;"> Forest is Home of PET 's, PET is just
+          getting started. Here's
+          what's coming to your pet's toolkit soon.</p>
+      </div>
+      <div class="coming-grid">
+        <div class="coming-card">
+          <span class="coming-badge">Coming Soon</span>
+          <span class="coming-icon">🪙</span>
+          <div class="coming-title">Token Tracker</div>
+          <p class="coming-desc">PET will show your remaining API tokens in real-time so you never run out
+            mid-conversation. Budget smarter, prompt harder.</p>
+        </div>
+        <div class="coming-card">
+          <span class="coming-badge">Coming Soon</span>
+          <span class="coming-icon">📝</span>
+          <div class="coming-title">Form Auto-Fill Agent</div>
+          <p class="coming-desc">Give PET your details once. It auto fills job applications, forms, and registration
+            pages across the web — no repetition.</p>
+        </div>
+        <div class="coming-card">
+          <span class="coming-badge">Coming Soon</span>
+          <span class="coming-icon">🧭</span>
+          <div class="coming-title">Learning Path</div>
+          <p class="coming-desc">Based on your prompt history, PET curates what you've already mastered and what to
+            study next — a truly personalized path.</p>
+        </div>
+        <div class="coming-card">
+          <span class="coming-badge">Coming Soon</span>
+          <span class="coming-icon">⌨️</span>
+          <div class="coming-title">Claude Code Agent</div>
+          <p class="coming-desc">Full terminal-integrated agent launching soon — PET comes to your development workflow
+            with code-aware prompt enhancement.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── ABOUT ─────────── -->
+  <!-- ✏️  EDIT THIS SECTION with your own info before pushing -->
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-inner">
+        <div class="about-photo-wrap">
+          <!-- Replace the emoji below with an <img> tag pointing to your photo if you have one -->
+          <!-- e.g. <img src="assets/founder.jpg" style="width:200px;height:200px;border-radius:50%;object-fit:cover;"> -->
+          <div class="about-photo">
+            <img src="../dist/assets/lottie/Pet&Me.png"
+              style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">
+          </div>
+          <div class="about-social">
+            <!-- ✏️ Replace # with your actual URLs -->
+            <a href="#" title="https://github.com/krishianjan">🐙</a>
+            <a href="#" title="LinkedIn">💼</a>
+            <a href="#" title="Twitter / X">🐦</a>
+          </div>
+        </div>
+        <div class="about-content">
+          <span class="section-label">👋 The Builder</span>
+          <!-- ✏️ Replace with your name -->
+          <h2 class="about-name">Krishianjan Lanka</h2>
+          <!-- ✏️ Replace with your title/role -->
+          <p class="about-role"> Data Grad · AI Engineer · AI Builder · Engineer Who focuses on Design & Eexecution </p>
+          <!-- ✏️ Replace with your bio (2-3 sentences) -->
+          <p class="about-bio">
+            I built PET because I got tired of writing perfect prompts and seeing people wrting vague prompts and
+            getting dead mediocre AI responses.
+            PET is my attempt to make prompt engineering accessible to everyone now all the Non tech Fellow Maters,
+            Doctor's ,P.M's, even
+            Plumber's
+            can write better prompts than a professional engineer & Vibe coder .
+            If you're getting less than 70% scores on your AI responses, let's fix that together.
+          </p>
+          <!-- ✏️ Replace the href with your Calendly / Cal.com / Tidycal booking link -->
+          <a class="about-book" href=https://calendar.app.google/WXuW4o4aY1baTqeY6 target="_blank" rel="noopener">
+            📅 Book a Call — Let's Talk AI
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── INSTALL GUIDE ─────────── -->
+  <section class="install" id="install">
+    <div class="container">
+      <div class="features-header" style="margin-bottom:48px;">
+        <span class="section-label">🔧 Install in 60 Seconds</span>
+        <h2 class="section-title">No Chrome Store. No Waiting. Completely Free.</h2>
+        <p class="section-sub">PET installs directly from GitHub. No $5 fee, no approval wait.</p>
+      </div>
+      <div class="install-inner">
+        <div class="install-steps">
+          <div class="install-step">
+            <div class="install-num">1</div>
+            <div class="install-step-text">
+              <strong>Download the extension ZIP</strong>
+              <p>Click the download button → save <code>pet-extension.zip</code> anywhere on your computer.</p>
+            </div>
+          </div>
+          <div class="install-step">
+            <div class="install-num">2</div>
+            <div class="install-step-text">
+              <strong>Unzip the file</strong>
+              <p>Extract the ZIP. You'll get a <code>dist/</code> folder that's the extension.</p>
+            </div>
+          </div>
+          <div class="install-step">
+            <div class="install-num">3</div>
+            <div class="install-step-text">
+              <strong>Open Chrome Extensions</strong>
+              <p>Go to <code>chrome://extensions</code> in your browser and enable <strong>Developer Mode</strong>
+                (top-right toggle).</p>
+            </div>
+          </div>
+          <div class="install-step">
+            <div class="install-num">4</div>
+            <div class="install-step-text">
+              <strong>Load the dist/ folder</strong>
+              <p>Click <strong>"Load unpacked"</strong> and select the <code>dist/</code> folder you extracted. Done —
+                your pet appears! 🐾</p>
+            </div>
+          </div>
+        </div>
+        <div class="install-download">
+          <div style="font-size:52px;margin-bottom:16px;">🐾</div>
+          <h3>PET v4.0 — Free Download</h3>
+          <p>Works on ChatGPT · Claude · Gemini · DeepSeek<br>No account needed to get started</p>
+          <!-- ✏️ After your first GitHub Release, replace # with the release ZIP URL:
              https://github.com/krishianjan/PET-Chain/releases/latest/download/pet-extension.zip -->
-        <a class="download-btn" href="https://github.com/krishianjan/PET-Chain/releases/latest/download/pet-extension.zip">
-          ⬇ Download Free (v4.0)
-        </a>
-        <div style="margin-top:16px;font-size:12px;opacity:.6;">
-          ~2MB · Chrome 88+ · No data collected
+          <a class="download-btn"
+            href="https://github.com/krishianjan/PET-Chain/releases/latest/download/pet-extension.zip">
+            ⬇ Download Free (v4.0)
+          </a>
+          <div style="margin-top:16px;font-size:12px;opacity:.6;">
+            ~2MB · Chrome 88+ · No data collected
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ─────────── FOOTER ─────────── -->
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <a href="index.html" class="nav-logo" style="font-size:24px;-webkit-text-fill-color:transparent;">🌿 PET</a>
-        <p class="footer-tagline">Making every prompt count, one pet at a time.</p>
-      </div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">Product</div>
-        <div class="footer-links">
-          <a href="#features">Features</a>
-          <a href="dashboard.html">Dashboard</a>
-          <a href="#how">How it works</a>
-          <a href="#coming">Coming Soon</a>
+  <!-- ─────────── FOOTER ─────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <a href="index.html" class="nav-logo" style="font-size:24px;-webkit-text-fill-color:transparent;">🌿 PET</a>
+          <p class="footer-tagline">Making every prompt count, one pet at a time.</p>
+        </div>
+        <div>
+          <div
+            style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">
+            Product</div>
+          <div class="footer-links">
+            <a href="#features">Features</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="#how">How it works</a>
+            <a href="#coming">Coming Soon</a>
+          </div>
+        </div>
+        <div>
+          <div
+            style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">
+            Links</div>
+          <div class="footer-links">
+            <a href="https://github.com/krishianjan/PET-Chain" target="_blank">GitHub</a>
+            <a href="#about">About the Builder</a>
+            <a href="https://github.com/krishianjan/PET-Chain/issues" target="_blank">Feedback</a>
+            <a href="https://github.com/krishianjan/PET-Chain/blob/main/LICENSE" target="_blank">MIT License</a>
+          </div>
+        </div>
+        <div>
+          <div
+            style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px;">
+            Platforms</div>
+          <div style="display:flex;gap:12px;font-size:28px;">
+            <span title="ChatGPT" style="cursor:default;">🤖</span>
+            <span title="Claude" style="cursor:default;">🟣</span>
+            <span title="Gemini" style="cursor:default;">💎</span>
+            <span title="DeepSeek" style="cursor:default;">🐋</span>
+          </div>
         </div>
       </div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">Links</div>
-        <div class="footer-links">
-          <a href="https://github.com/krishianjan/PET-Chain" target="_blank">GitHub</a>
-          <a href="#about">About the Builder</a>
-          <a href="https://github.com/krishianjan/PET-Chain/issues" target="_blank">Feedback</a>
-          <a href="https://github.com/krishianjan/PET-Chain/blob/main/LICENSE" target="_blank">MIT License</a>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px;">Platforms</div>
-        <div style="display:flex;gap:12px;font-size:28px;">
-          <span title="ChatGPT" style="cursor:default;">🤖</span>
-          <span title="Claude" style="cursor:default;">🟣</span>
-          <span title="Gemini" style="cursor:default;">💎</span>
-          <span title="DeepSeek" style="cursor:default;">🐋</span>
+      <div class="footer-bottom">
+        <div class="footer-copy">© 2026 PET — Prompt Enhancement Tool</div>
+        <div class="footer-legal">
+          <a href="#">Privacy Policy</a>
+          <a href="#">MIT License</a>
         </div>
       </div>
     </div>
-    <div class="footer-bottom">
-      <div class="footer-copy">© 2026 PET — Prompt Enhancement Tool</div>
-      <div class="footer-legal">
-        <a href="#">Privacy Policy</a>
-        <a href="#">MIT License</a>
-      </div>
-    </div>
-  </div>
-</footer>
+  </footer>
 
-<script>
-  // ── Leaf particles ──
-  const leafContainer = document.getElementById('leaf-container');
-  const leafEmojis = ['🍃','🌿','🍀','🌱'];
-  for (let i = 0; i < 22; i++) {
-    const leaf = document.createElement('div');
-    leaf.className = 'leaf-particle';
-    leaf.textContent = leafEmojis[i % leafEmojis.length];
-    leaf.style.left = Math.random() * 100 + '%';
-    leaf.style.bottom = (Math.random() * 60) + '%';
-    leaf.style.animationDuration = (6 + Math.random() * 10) + 's';
-    leaf.style.animationDelay = (Math.random() * 8) + 's';
-    leaf.style.fontSize = (14 + Math.random() * 14) + 'px';
-    leafContainer.appendChild(leaf);
-  }
+  <script>
+    // ── Leaf particles ──
+    const leafContainer = document.getElementById('leaf-container');
+    const leafEmojis = ['🍃', '🌿', '🍀', '🌱'];
+    for (let i = 0; i < 22; i++) {
+      const leaf = document.createElement('div');
+      leaf.className = 'leaf-particle';
+      leaf.textContent = leafEmojis[i % leafEmojis.length];
+      leaf.style.left = Math.random() * 100 + '%';
+      leaf.style.bottom = (Math.random() * 60) + '%';
+      leaf.style.animationDuration = (6 + Math.random() * 10) + 's';
+      leaf.style.animationDelay = (Math.random() * 8) + 's';
+      leaf.style.fontSize = (14 + Math.random() * 14) + 'px';
+      leafContainer.appendChild(leaf);
+    }
 
-  // ── Hero pet cycling ──
-  const pets = ['🐕','🐈','🦜','🐇'];
-  let pi = 0;
-  setInterval(() => {
-    pi = (pi + 1) % pets.length;
-    document.getElementById('heroPet').textContent = pets[pi];
-  }, 2200);
+    // ── Hero pet cycling ──
+    const pets = ['🐕', '🐈', '🦜', '🐇'];
+    let pi = 0;
+    setInterval(() => {
+      pi = (pi + 1) % pets.length;
+      document.getElementById('heroPet').textContent = pets[pi];
+    }, 2200);
 
-  // ── Preview chart bars ──
-  const scores = [45,48,50,52,55,53,58,60,62,64,62,67,70,68,72,74,73,78,82,85];
-  const chart = document.getElementById('previewChart');
-  const max = Math.max(...scores);
-  scores.forEach(s => {
-    const bar = document.createElement('div');
-    bar.className = 'mock-bar';
-    bar.style.height = ((s / max) * 100) + '%';
-    const hue = s >= 70 ? '#52b788' : s >= 55 ? '#f8d276' : '#e05c5c';
-    bar.style.background = `linear-gradient(180deg, ${hue}, ${hue}99)`;
-    chart.appendChild(bar);
-  });
-</script>
+    // ── Preview chart bars ──
+    const scores = [45, 48, 50, 52, 55, 53, 58, 60, 62, 64, 62, 67, 70, 68, 72, 74, 73, 78, 82, 85];
+    const chart = document.getElementById('previewChart');
+    const max = Math.max(...scores);
+    scores.forEach(s => {
+      const bar = document.createElement('div');
+      bar.className = 'mock-bar';
+      bar.style.height = ((s / max) * 100) + '%';
+      const hue = s >= 70 ? '#52b788' : s >= 55 ? '#f8d276' : '#e05c5c';
+      bar.style.background = `linear-gradient(180deg, ${hue}, ${hue}99)`;
+      chart.appendChild(bar);
+    });
+  </script>
 </body>
+
 </html>
