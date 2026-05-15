@@ -22,7 +22,10 @@
     "https://claude.ai/*",
     "https://gemini.google.com/*",
     "https://x.com/*",
-    "https://chat.deepseek.com/*"
+    "https://chat.deepseek.com/*",
+    "https://deepseek.com/*",
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*"
   ],
   "background": {
     "service_worker": "service-worker-loader.js",
@@ -31,7 +34,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.jsx-loader-db955547.js"
+        "assets/index.jsx-loader-834e120c.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -39,7 +42,10 @@
         "https://claude.ai/*",
         "https://gemini.google.com/*",
         "https://x.com/*",
-        "https://chat.deepseek.com/*"
+        "https://chat.deepseek.com/*",
+        "https://deepseek.com/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*"
       ],
       "run_at": "document_idle"
     }
@@ -77,12 +83,15 @@
         "https://chat.openai.com/*",
         "https://chatgpt.com/*",
         "https://claude.ai/*",
+        "https://deepseek.com/*",
         "https://gemini.google.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
         "https://x.com/*"
       ],
       "resources": [
         "assets/metrics_store-e323fb81.js",
-        "assets/index.jsx-7357b256.js"
+        "assets/index.jsx-5307ba80.js"
       ],
       "use_dynamic_url": false
     }

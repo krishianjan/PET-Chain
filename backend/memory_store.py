@@ -3,21 +3,29 @@ from typing import Optional
 
 class ThreadState:
     def __init__(self):
-        self.goal           = ""
-        self.intent         = ""
-        self.technique      = ""
-        self.persona        = ""
-        self.user_level     = "intermediate"
-        self.prompt_count   = 0
-        self.score_history  = []          # [{"score":72,"ts":1234}]
-        self.covered        = []          # topics confirmed covered
-        self.missing        = []          # topics still needed
-        self.milestones     = []          # completed steps
-        self.on_track       = True
-        self.last_response  = ""          # last 400 chars of LLM reply
-        self.followups_used = []          # prevent repetition
-        self.created_at     = time.time()
-        self.updated_at     = time.time()
+        self.goal             = ""
+        self.intent           = ""
+        self.persona          = ""
+        self.user_level       = "intermediate"
+        self.prompt_count     = 0
+        self.turn_count       = 0           # how many eval turns done
+
+        # Cumulative goal-completion tracking (persists across turns)
+        self.required_elements = []         # LLM-extracted checklist for this goal
+        self.covered_elements  = []         # accumulates as turns happen
+        self.missing_elements  = []         # shrinks as things get addressed
+        self.completion_pct    = 0          # covered / required * 100
+        self.should_stop       = False      # True when goal is substantially complete
+        self.stop_reason       = ""         # why we're stopping
+
+        # Score tracking
+        self.score_history    = []          # per-turn scores
+        self.best_score       = 0
+        self.last_response    = ""
+        self.followups_used   = []          # prevent angle repetition
+
+        self.created_at       = time.time()
+        self.updated_at       = time.time()
 
     def to_dict(self):
         return self.__dict__.copy()
@@ -31,14 +39,7 @@ class ThreadState:
         return s
 
 class MemoryStore:
-    """
-    In-memory store with:
-    - Per-session isolation
-    - Atomic updates via lock
-    - Auto-TTL cleanup for memory safety
-    """
-
-    TTL_SECONDS = 3600  # 1 hour inactivity clears session
+    TTL_SECONDS = 3600
 
     def __init__(self):
         self._store: dict[str, ThreadState] = {}
@@ -52,7 +53,6 @@ class MemoryStore:
             return self._store[session_id]
 
     def update(self, session_id: str, **kwargs):
-        """Atomic update — rolls back on error."""
         with self._lock:
             state = self.get(session_id)
             backup = state.to_dict()

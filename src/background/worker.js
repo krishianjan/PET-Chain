@@ -1050,62 +1050,97 @@ function buildFollowUp(domain, gaps, covered, score) {
   return generic[domain] || generic.general
 }
 
-// ── Local rule-based scorer (fallback when backend offline) ───────────────
-function ruleScore(question, response) {
-  const STOP = new Set(['want','know','about','that','this','with','from','have','will','what','when','where','which','your','their','some','also','into','more','very','just','like','than','then','them','they','been','were','does','make','find','tell','give','show','need','help'])
-  const domain = detectDomain(question)
-  const qw   = question.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP.has(w))
-  const rt   = response.toLowerCase()
+// ── Session store for offline goal-completion tracking ───────────────────────
+// Mirrors backend/memory_store.py but in-memory for service worker
+const _sessions = {}
+function getSession(sid) {
+  if (!_sessions[sid]) _sessions[sid] = { goal:'', required:[], covered:[], turn:0, bestScore:0 }
+  return _sessions[sid]
+}
 
-  const hits    = qw.filter(w => rt.includes(w))
-  const missing = qw.filter(w => !rt.includes(w)).slice(0, 4)
-  const hitRate = hits.length / Math.max(qw.length, 1)
+// ── Offline scorer — goal-completion based, session-aware ─────────────────────
+// No static domain buckets. No if-else per topic.
+// Works by: extract goal words → check coverage → accumulate across turns → stop when done.
+function ruleScore(question, response, sessionId = 'default') {
+  const STOP = new Set(['want','know','about','that','this','with','from','have','will',
+    'what','when','where','which','your','their','some','also','into','more','very','just',
+    'like','than','then','them','they','been','were','does','make','find','tell','give',
+    'show','need','help','please','could','would','should','explain','describe','create'])
 
-  const wc   = response.split(/\s+/).length
-  const nums = /\d+[.,]?\d*/.test(response)
-  const list = /\n[\-\*•]|\n\d+\./.test(response)
-  const head = /\n#{1,3}\s|\n[A-Z][A-Z\s]{3,}:\n/.test(response)
-  const exmp = /\b(example|instance|such as|for instance|e\.g\.)\b/i.test(response)
+  const sess = getSession(sessionId)
+  if (!sess.goal) sess.goal = question
 
-  let sc = Math.round(hitRate * 55) + 15
-  if (wc > 400) sc += 12; else if (wc > 200) sc += 7; else if (wc > 80) sc += 3
-  if (nums) sc += 7
-  if (list) sc += 6
-  if (head) sc += 5
-  if (exmp) sc += 5
+  // Extract meaningful goal keywords (these form the implicit checklist)
+  const goalWords = question.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !STOP.has(w))
 
-  // Domain-specific quality signals
-  if (domain === 'finance') {
-    if (/\d+[%％]/.test(response)) sc += 6
-    if (/\$\d|USD|\bROI\b|\bCAGR\b|\bP\/E\b/.test(response)) sc += 5
-    if (/\b(risk|downside|diversif|volatility)\b/i.test(response)) sc += 4
-  } else if (domain === 'code_debug' || domain === 'code_build') {
-    if (/```[\s\S]*?```/.test(response)) sc += 8   // code block
-    if (/\b(function|class|import|const|def |return)\b/.test(response)) sc += 4
-    if (/\b(test|assert|expect|verify)\b/i.test(response)) sc += 3
-  } else if (domain === 'math') {
-    if (/[=≈∫∑∏√±]/u.test(response)) sc += 6        // math symbols
-    if (/step\s+\d|^\d+\.\s/im.test(response)) sc += 5  // step-by-step
-    if (/therefore|hence|thus|q\.e\.d/i.test(response)) sc += 3
-  } else if (domain === 'learn') {
-    if (/\b(analogy|think of|imagine|like a)\b/i.test(response)) sc += 5  // analogies
-    if (/\b(common mistake|avoid|don't|careful)\b/i.test(response)) sc += 4
+  if (!sess.required.length) sess.required = goalWords
+
+  const rt = response.toLowerCase()
+
+  // Check what this response covers
+  const newlyCovered = goalWords.filter(w => rt.includes(w) && !sess.covered.includes(w))
+  const allCovered   = [...new Set([...sess.covered, ...newlyCovered])]
+  const stillMissing = sess.required.filter(w => !allCovered.includes(w))
+
+  const coveragePct  = Math.round(allCovered.length / Math.max(sess.required.length, 1) * 100)
+
+  // Quality signals (domain-agnostic, content-based)
+  const wc      = response.split(/\s+/).length
+  const hasCode  = /```[\s\S]*?```/.test(response)
+  const hasList  = /\n[\-\*•]|\n\d+\./.test(response)
+  const hasHead  = /\n#{1,3}\s|\*\*[^*]+\*\*/.test(response)
+  const hasNums  = /\d+/.test(response)
+  const hasExmpl = /\b(example|instance|such as|e\.g\.|for instance|specifically|consider)\b/i.test(response)
+  const hasSteps = /step\s+\d|first[,\s]|then[,\s]|finally[,\s]/i.test(response)
+
+  let quality = 30
+  if (wc > 400) quality += 20; else if (wc > 200) quality += 12; else if (wc > 80) quality += 6
+  if (hasCode)  quality += 15
+  if (hasList)  quality += 8
+  if (hasHead)  quality += 6
+  if (hasNums)  quality += 6
+  if (hasExmpl) quality += 8
+  if (hasSteps) quality += 7
+  quality = Math.min(100, quality)
+
+  // Final score = 60% goal coverage + 40% response quality
+  const sc = Math.min(95, Math.max(20, Math.round(coveragePct * 0.6 + quality * 0.4)))
+
+  // Update session
+  sess.covered   = allCovered
+  sess.turn     += 1
+  sess.bestScore = Math.max(sess.bestScore, sc)
+
+  // Stop conditions
+  const shouldStop = coveragePct >= 85 || (sess.turn >= 4 && coveragePct >= 65)
+
+  // Follow-up: target the single most important missing element
+  let next_prompt
+  if (shouldStop) {
+    next_prompt = `✓ Goal complete (${coveragePct}% coverage). The response covers: ${allCovered.slice(0, 5).join(', ')}.`
+  } else if (stillMissing.length) {
+    const topGap = stillMissing[0]
+    const prevWork = newlyCovered.length
+      ? `Your response addressed ${newlyCovered.slice(0, 2).join(' and ')} well. `
+      : ''
+    next_prompt = `${prevWork}The response still hasn't covered "${topGap}" adequately. Please add: (1) a clear definition or explanation of ${topGap} as it relates to ${sess.goal.slice(0, 60)}, (2) a concrete example with specific values or steps, and (3) how it connects to what you already explained.`
+  } else {
+    next_prompt = `Good coverage. Now go deeper: pick the most complex aspect you mentioned and walk through it with a complete real-world example — specific names, actual numbers, and every step shown.`
   }
 
-  sc = Math.max(20, Math.min(96, sc))
-
-  const grade       = sc >= 85 ? 'A' : sc >= 70 ? 'B' : sc >= 55 ? 'C' : 'D'
-  const grade_label = sc >= 85 ? 'Excellent ✦' : sc >= 70 ? 'Good ✓' : sc >= 55 ? 'Partial ~' : 'Weak ✗'
-
-  const covered = hits.slice(0, 3).map(w => `"${w}" addressed`)
-  if (!covered.length) covered.push('Response was provided')
-
-  const next_prompt = buildFollowUp(domain, missing, hits, sc)
+  const grade      = sc >= 85 ? 'A' : sc >= 70 ? 'B' : sc >= 55 ? 'C' : 'D'
+  const grade_label= sc >= 85 ? 'Excellent ✦' : sc >= 70 ? 'Good ✓' : sc >= 55 ? 'Partial ~' : 'Weak ✗'
 
   return {
     ok: true, score: sc, grade, grade_label,
-    covered,
-    missing: missing.map(w => `"${w}" needs more depth`),
+    newly_covered:  newlyCovered.slice(0, 4),
+    still_missing:  stillMissing.slice(0, 4),
+    completion_pct: coveragePct,
+    should_stop:    shouldStop,
+    stop_reason:    shouldStop ? (coveragePct >= 85 ? 'Coverage threshold reached' : 'Substantial coverage after multiple turns') : '',
     next_prompt,
   }
 }

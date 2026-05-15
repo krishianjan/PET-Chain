@@ -482,56 +482,93 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
             )
           })}
 
-          {/* Score Card */}
-          {score && (
-            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 26, fontWeight: 800, color: score.score >= 75 ? '#16a34a' : score.score >= 55 ? '#d97706' : '#dc2626' }}>
-                  {score.score}%
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#374151' }}>Grade {score.grade}</div>
-                  <div style={{ fontSize: 10, color: '#6b7280' }}>{score.grade_label}</div>
-                </div>
-              </div>
+          {/* Score Card — goal-completion aware */}
+          {score && (() => {
+            const done       = score.should_stop
+            const completion = score.completion_pct ?? score.score
+            const covered    = score.newly_covered  || score.covered  || []
+            const missing    = score.still_missing  || score.missing  || []
+            const scoreColor = score.score >= 75 ? '#16a34a' : score.score >= 55 ? '#d97706' : '#dc2626'
+            const compColor  = completion >= 80 ? '#16a34a' : completion >= 55 ? '#f59e0b' : '#ef4444'
 
-              {/* Score bar */}
-              <div style={{ height: 6, background: '#e5e7eb', borderRadius: 3, marginBottom: 10, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${score.score}%`, background: score.score >= 75 ? '#16a34a' : score.score >= 55 ? '#f59e0b' : '#ef4444', borderRadius: 3, transition: 'width 0.5s ease' }} />
-              </div>
+            return (
+              <div style={{ background: done ? '#f0fdf4' : '#f9fafb', border: `1px solid ${done ? '#bbf7d0' : '#e5e7eb'}`, borderRadius: 12, padding: 12 }}>
 
-              {score.covered?.length > 0 && (
-                <div style={{ marginBottom: 7 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', marginBottom: 3 }}>✓ Covered well</div>
-                  {score.covered.map((c, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {c}</div>)}
-                </div>
-              )}
-
-              {score.missing?.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 3 }}>✗ Gaps found</div>
-                  {score.missing.map((m, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {m}</div>)}
-                </div>
-              )}
-
-              {score.next_prompt && (
-                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: 9 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>→ Suggested Next Prompt</div>
-                  <div style={{ fontSize: 10, color: '#374151', lineHeight: 1.55, marginBottom: 6 }}>{score.next_prompt}</div>
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    <button
-                      onClick={() => inject(score.next_prompt)}
-                      style={{ flex: 2, padding: '4px 0', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
-                    >↗ Use</button>
-                    <button
-                      onClick={() => copyToClipboard('next', score.next_prompt)}
-                      style={{ padding: '4px 8px', background: copied === 'next' ? '#f0fdf4' : '#f9fafb', color: copied === 'next' ? '#16a34a' : '#6b7280', border: '1px solid #e5e7eb', borderRadius: 5, cursor: 'pointer', fontSize: 10 }}
-                    >{copied === 'next' ? '✓' : '⎘'}</button>
+                {/* Header row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: scoreColor }}>{score.score}%</div>
+                    <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>response quality</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: compColor }}>{completion}%</div>
+                    <div style={{ fontSize: 9, color: '#9ca3af' }}>goal complete</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Grade {score.grade}</div>
+                    <div style={{ fontSize: 10, color: '#6b7280' }}>{score.grade_label}</div>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Goal completion bar */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 3 }}>Goal completion</div>
+                  <div style={{ height: 7, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${completion}%`, background: compColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
+                  </div>
+                </div>
+
+                {/* Done state */}
+                {done ? (
+                  <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: 10, marginBottom: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', marginBottom: 4 }}>✓ Goal Complete</div>
+                    <div style={{ fontSize: 10, color: '#15803d', lineHeight: 1.55 }}>{score.stop_reason || 'All required elements have been addressed.'}</div>
+                    {covered.length > 0 && (
+                      <div style={{ marginTop: 6, fontSize: 9, color: '#166534' }}>
+                        Covered: {covered.slice(0, 5).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Covered */}
+                    {covered.length > 0 && (
+                      <div style={{ marginBottom: 7 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', marginBottom: 3 }}>✓ This response covered</div>
+                        {covered.slice(0, 4).map((c, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {c}</div>)}
+                      </div>
+                    )}
+
+                    {/* Missing */}
+                    {missing.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 3 }}>✗ Still missing</div>
+                        {missing.slice(0, 3).map((m, i) => <div key={i} style={{ fontSize: 10, color: '#374151', marginBottom: 2, paddingLeft: 8 }}>• {m}</div>)}
+                      </div>
+                    )}
+
+                    {/* Next prompt — targeted at the actual gap */}
+                    {score.next_prompt && (
+                      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: 9 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>→ Next: fill the gap</div>
+                        <div style={{ fontSize: 10, color: '#374151', lineHeight: 1.55, marginBottom: 6 }}>{score.next_prompt}</div>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button onClick={() => inject(score.next_prompt)}
+                            style={{ flex: 2, padding: '4px 0', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>
+                            ↗ Use
+                          </button>
+                          <button onClick={() => copyToClipboard('next', score.next_prompt)}
+                            style={{ padding: '4px 8px', background: copied === 'next' ? '#f0fdf4' : '#f9fafb', color: copied === 'next' ? '#16a34a' : '#6b7280', border: '1px solid #e5e7eb', borderRadius: 5, cursor: 'pointer', fontSize: 10 }}>
+                            {copied === 'next' ? '✓' : '⎘'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
