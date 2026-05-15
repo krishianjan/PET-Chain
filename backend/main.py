@@ -8,7 +8,7 @@ from memory_store import memory
 from agents import classify_intent_llm, fast_intent_fallback, generate_rewrites, evaluate_response, offline_evaluate
 
 load_dotenv()
-app = FastAPI(title="PET API v4")
+app = FastAPI(title="PET API v1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class RewriteReq(BaseModel):

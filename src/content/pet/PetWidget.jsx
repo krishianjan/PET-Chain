@@ -21,12 +21,13 @@ const PET_EMOJI = Object.fromEntries(PETS.map(p => [p.id, p.emoji]))
 
 export default function PetWidget() {
   const ctrl   = useRef(new PetController())
-  const [panel, setPanel] = useState(S.CLOSED)
-  const [ptype, setPtype] = useState('dog')
-  const [keys,  setKeys]  = useState({})
-  const [next,  setNext]  = useState(null)
-  const [ready, setReady] = useState(false)
+  const [panel,    setPanel]    = useState(S.CLOSED)
+  const [ptype,    setPtype]    = useState('dog')
+  const [keys,     setKeys]     = useState({})
+  const [next,     setNext]     = useState(null)
+  const [ready,    setReady]    = useState(false)
   const [showPicker, setShowPicker] = useState(false)
+  const [petName,  setPetName]  = useState('')
 
   const posRef   = useRef({ x: window.innerWidth - 96, y: window.innerHeight - 110 })
   const [pos, setPos]   = useState(posRef.current)
@@ -37,13 +38,14 @@ export default function PetWidget() {
 
   // ── Load saved prefs ────────────────────────────────────────────────────
   useEffect(() => {
-    chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model'], r => {
+    chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model','pet_name'], r => {
       const t = r.pet_type || 'dog'
       const p = r.pet_pos  || posRef.current
       setPtype(t)
       posRef.current = p
       setPos(p)
       setKeys({ groq: r.pet_key_groq, openai: r.pet_key_openai, deepseek: r.pet_key_deepseek, ollama_model: r.pet_ollama_model || null })
+      if (r.pet_name) setPetName(r.pet_name)
       setReady(true)
       if (!r.pet_type) setPanel(S.OPEN)   // first launch → open sidebar
     })
@@ -270,6 +272,8 @@ export default function PetWidget() {
             nextStep={next}
             clearNext={() => setNext(null)}
             onPetSelect={selectPet}
+            petName={petName}
+            onPetName={name => { setPetName(name); chrome.storage.local.set({ pet_name: name }) }}
           />
         </div>
       )}

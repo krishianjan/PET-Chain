@@ -83,10 +83,13 @@ function KeyRow({ provider, label, value, onSave, hint }) {
 }
 
 function Dashboard() {
-  const [m,    setM]    = useState(null)
-  const [keys, setKeys] = useState({})
-  const [pet,  setPet]  = useState('dog')
-  const [tab,  setTab]  = useState('stats')
+  const [m,        setM]        = useState(null)
+  const [keys,     setKeys]     = useState({})
+  const [pet,      setPet]      = useState('dog')
+  const [tab,      setTab]      = useState('stats')
+  const [petName,  setPetName]  = useState('')
+  const [editName, setEditName] = useState(false)
+  const [nameDraft,setNameDraft]= useState('')
 
   const [ollamaModels, setOllamaModels] = useState(null)
   const [ollamaStatus, setOllamaStatus] = useState('')
@@ -95,8 +98,18 @@ function Dashboard() {
   useEffect(() => {
     getMetrics().then(setM)
     chrome.runtime.sendMessage({ type: 'GET_ALL_KEYS' }).then(k => setKeys(k || {})).catch(() => {})
-    chrome.storage.local.get('pet_type', r => setPet(r.pet_type || 'dog'))
+    chrome.storage.local.get(['pet_type','pet_name'], r => {
+      setPet(r.pet_type || 'dog')
+      if (r.pet_name) setPetName(r.pet_name)
+    })
   }, [])
+
+  function savePetName(name) {
+    const n = name.trim()
+    setPetName(n)
+    chrome.storage.local.set({ pet_name: n })
+    setEditName(false)
+  }
 
   function saveKey(provider, key) {
     chrome.runtime.sendMessage({ type: 'SET_KEY', provider, key })
@@ -142,18 +155,46 @@ function Dashboard() {
     <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', background: '#fff', width: 340 }}>
 
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg,#534ab7,#7c3aed)', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <LogoAnimation />
-          <div>
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: 13 }}>PET Dashboard</div>
-            <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 10, marginTop: 1 }}>{engineLabel}</div>
+      <div style={{ background: 'linear-gradient(135deg,#534ab7,#7c3aed)', padding: '12px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <LogoAnimation />
+            <div>
+              <div style={{ color: '#fff', fontWeight: 800, fontSize: 13 }}>PET v1.0</div>
+              <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 10, marginTop: 1 }}>{engineLabel}</div>
+            </div>
           </div>
+          <button onClick={() => chrome.tabs.create({ url: WEBSITE })}
+            style={{ fontSize: 9, padding: '3px 8px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 5, cursor: 'pointer' }}>
+            🌐 Website ↗
+          </button>
         </div>
-        <button onClick={() => chrome.tabs.create({ url: WEBSITE })}
-          style={{ fontSize: 9, padding: '3px 8px', background: 'rgba(255,255,255,.15)', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 5, cursor: 'pointer' }}>
-          🌐 Website ↗
-        </button>
+        {/* Pet name row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ fontSize: 18 }}>
+            {pet === 'dog' ? '🐕' : pet === 'cat' ? '🐈' : pet === 'bird' ? '🦜' : pet === 'rabbit' ? '🐇' : '🧑'}
+          </span>
+          {editName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') savePetName(nameDraft); if (e.key === 'Escape') setEditName(false) }}
+              onBlur={() => savePetName(nameDraft)}
+              placeholder="Name your pet…"
+              style={{ fontSize: 13, fontWeight: 700, background: 'rgba(255,255,255,.2)', color: '#fff', border: '1px solid rgba(255,255,255,.5)', borderRadius: 5, padding: '2px 8px', outline: 'none', width: 140 }}
+            />
+          ) : (
+            <span
+              onClick={() => { setNameDraft(petName); setEditName(true) }}
+              title="Click to name your pet"
+              style={{ fontSize: 13, fontWeight: 700, color: petName ? '#fff' : 'rgba(255,255,255,.45)', cursor: 'text', borderBottom: '1px dashed rgba(255,255,255,.4)' }}
+            >
+              {petName || 'Name your pet…'}
+            </span>
+          )}
+          {petName && <span style={{ fontSize: 9, color: 'rgba(255,255,255,.5)', marginLeft: 2 }}>✎ click to rename</span>}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -292,7 +333,7 @@ function Dashboard() {
 
       {/* Footer */}
       <div style={{ borderTop: '1px solid #f3f4f6', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, color: '#9ca3af' }}>PET v4.0</span>
+        <span style={{ fontSize: 9, color: '#9ca3af' }}>PET v1.0 · Prompt Enhancement Tool</span>
         <button onClick={() => chrome.storage.local.remove('pet_metrics_v1', () => getMetrics().then(setM))}
           style={{ fontSize: 9, padding: '2px 7px', background: 'none', border: '1px solid #e5e7eb', borderRadius: 4, color: '#9ca3af', cursor: 'pointer' }}>
           Reset stats

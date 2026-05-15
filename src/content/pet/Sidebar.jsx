@@ -6,15 +6,17 @@ import selectorsConfig from '../../../selectors.config.json'
 
 const PERSIST_KEY = 'pet_sidebar_state_v1'
 
-export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petType, keys, setKeys, nextStep, clearNext, onPetSelect }) {
-  const [view,      setView]      = useState('main')
-  const [rewrites,  setRewrites]  = useState([])
-  const [score,     setScore]     = useState(null)
-  const [loading,   setLoading]   = useState(false)
-  const [status,    setStatus]    = useState('Ready')
-  const [copied,    setCopied]    = useState(null)
-  const [editing,   setEditing]   = useState(null)
-  const [editTexts, setEditTexts] = useState({})
+export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petType, keys, setKeys, nextStep, clearNext, onPetSelect, petName, onPetName }) {
+  const [view,        setView]      = useState('main')
+  const [rewrites,    setRewrites]  = useState([])
+  const [score,       setScore]     = useState(null)
+  const [loading,     setLoading]   = useState(false)
+  const [status,      setStatus]    = useState('Ready')
+  const [copied,      setCopied]    = useState(null)
+  const [editing,     setEditing]   = useState(null)
+  const [editTexts,   setEditTexts] = useState({})
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft,   setNameDraft]   = useState('')
 
   const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
   const sizeRef   = useRef({ w: 340, h: 520 })
@@ -308,22 +310,34 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     try { await recordScore(final.score) } catch { /* metrics never block UX */ }
   }
 
-  // ── Drag handlers via useEffect (mouse events on window) ──────────────────
-  // Using inline onMouseMove on window would cause re-renders; attach once
-  if (typeof window !== 'undefined' && !window.__petDragAttached) {
-    window.__petDragAttached = true
-    window.addEventListener('mousemove', (e) => {
+  // ── Drag + resize handlers — attached once via useEffect ─────────────────
+  useEffect(() => {
+    const mv = (e) => {
       if (dragging.current) {
-        const np = { x: Math.max(0, Math.min(window.innerWidth - sizeRef.current.w - 8, e.clientX - doff.current.x)), y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - doff.current.y)) }
+        const np = {
+          x: Math.max(0, Math.min(window.innerWidth  - sizeRef.current.w - 8, e.clientX - doff.current.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - doff.current.y)),
+        }
         posRef.current = np
+        setPos({ ...np })
       }
       if (resizing.current) {
-        const ns = { w: Math.max(300, Math.min(680, rstart.current.w + e.clientX - rstart.current.x)), h: Math.max(360, Math.min(window.innerHeight - 20, rstart.current.h + e.clientY - rstart.current.y)) }
+        const ns = {
+          w: Math.max(300, Math.min(680, rstart.current.w + e.clientX - rstart.current.x)),
+          h: Math.max(360, Math.min(window.innerHeight - 20, rstart.current.h + e.clientY - rstart.current.y)),
+        }
         sizeRef.current = ns
+        setSz({ ...ns })
       }
-    })
-    window.addEventListener('mouseup', () => { dragging.current = false; resizing.current = false })
-  }
+    }
+    const up = () => { dragging.current = false; resizing.current = false }
+    window.addEventListener('mousemove', mv)
+    window.addEventListener('mouseup',   up)
+    return () => {
+      window.removeEventListener('mousemove', mv)
+      window.removeEventListener('mouseup',   up)
+    }
+  }, [])
 
   // ── Sidebar logo animation ────────────────────────────────────────────────
   function LogoAnim() {
@@ -355,22 +369,80 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
       fontFamily: 'system-ui,-apple-system,sans-serif',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Header — drag handle */}
       <div
-        onMouseDown={e => { dragging.current = true; doff.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y }; e.preventDefault() }}
-        style={{ padding: '10px 12px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'move', background: '#f8f8ff', userSelect: 'none' }}
+        onMouseDown={e => {
+          // Don't start drag from interactive elements inside header
+          if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return
+          dragging.current = true
+          doff.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y }
+          e.preventDefault()
+        }}
+        style={{ padding: '8px 10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'move', background: '#f8f8ff', userSelect: 'none', gap: 6 }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        {/* Left: logo + name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <LogoAnim />
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#534ab7' }}>PET</div>
-            <div style={{ fontSize: 10, color: '#9ca3af' }}>{loading ? '…' : status}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontWeight: 700, fontSize: 12, color: '#534ab7' }}>PET</span>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={e => setNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { onPetName?.(nameDraft.trim()); setEditingName(false) }
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                  onBlur={() => { onPetName?.(nameDraft.trim()); setEditingName(false) }}
+                  placeholder="Name your pet…"
+                  style={{ fontSize: 11, fontWeight: 600, color: '#374151', border: '1px solid #c4b5fd', borderRadius: 4, padding: '1px 5px', width: 90, outline: 'none', background: '#fff' }}
+                />
+              ) : (
+                <span
+                  onClick={() => { setNameDraft(petName || ''); setEditingName(true) }}
+                  title="Click to name your pet"
+                  style={{ fontSize: 11, fontWeight: 600, color: petName ? '#374151' : '#c4b5fd', cursor: 'text', borderBottom: '1px dashed #c4b5fd', lineHeight: 1.2 }}
+                >
+                  {petName || 'Name me…'}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 9, color: '#9ca3af' }}>{loading ? '…' : status}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 5 }}>
-          {!apiKey && <button onClick={() => setView(v => v === 'setup' ? 'main' : 'setup')} style={{ fontSize: 9, padding: '3px 7px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 5, cursor: 'pointer' }}>+ Key</button>}
-          <button onClick={onMinimize} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af' }}>─</button>
-          <button onClick={onClose}    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af' }}>✕</button>
+
+        {/* Right: size controls + window actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          {!apiKey && (
+            <button onClick={() => setView(v => v === 'setup' ? 'main' : 'setup')}
+              style={{ fontSize: 9, padding: '2px 6px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, cursor: 'pointer' }}>
+              + Key
+            </button>
+          )}
+          {/* Size – */}
+          <button
+            title="Shrink"
+            onClick={() => {
+              const ns = { w: Math.max(300, sizeRef.current.w - 40), h: Math.max(360, sizeRef.current.h - 40) }
+              sizeRef.current = ns; setSz({ ...ns })
+            }}
+            style={{ border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', borderRadius: 4, width: 20, height: 20, cursor: 'pointer', fontSize: 13, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+            −
+          </button>
+          {/* Size + */}
+          <button
+            title="Expand"
+            onClick={() => {
+              const ns = { w: Math.min(720, sizeRef.current.w + 40), h: Math.min(window.innerHeight - 20, sizeRef.current.h + 40) }
+              sizeRef.current = ns; setSz({ ...ns })
+            }}
+            style={{ border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', borderRadius: 4, width: 20, height: 20, cursor: 'pointer', fontSize: 13, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+            +
+          </button>
+          <button onClick={onMinimize} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af', width: 20, height: 20 }}>─</button>
+          <button onClick={onClose}    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#9ca3af', width: 20, height: 20 }}>✕</button>
         </div>
       </div>
 

@@ -12,6 +12,7 @@ const CSS = `
 @keyframes _pet_err  {0%,100%{transform:translateX(0) rotate(0)}15%,55%{transform:translateX(-9px) rotate(-5deg)}35%,75%{transform:translateX(9px) rotate(5deg)}}
 @keyframes _pet_fade {0%,100%{opacity:1;transform:scale(1)}40%,60%{opacity:.35;transform:scale(.96)}}
 @keyframes _pet_float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-6px) scale(1.02)}}
+@keyframes _pet_tilt {0%,100%{transform:rotate(-8deg) scale(1)}50%{transform:rotate(8deg) scale(1.05)}}
 
 [data-lp] .pet-emoji { transition: filter .3s ease; }
 [data-lp][data-state=idle]         .pet-emoji{animation:_pet_float 2.6s cubic-bezier(.45,.05,.55,.95) infinite}
@@ -23,6 +24,16 @@ const CSS = `
 [data-lp][data-state=happy]        .pet-emoji{animation:_pet_head   .42s cubic-bezier(.36,.07,.19,.97) 6;filter:drop-shadow(0 0 8px rgba(250,204,21,.7))}
 [data-lp][data-state=celebrating]  .pet-emoji{animation:_pet_jump   .52s cubic-bezier(.36,.07,.19,.97) 8;filter:drop-shadow(0 0 12px rgba(74,222,128,.7))}
 [data-lp][data-state=error]        .pet-emoji{animation:_pet_err    .35s cubic-bezier(.36,.07,.19,.97) 5;filter:drop-shadow(0 0 8px rgba(248,113,113,.7))}
+
+/* ── Bird: visual differentiation per state (one Lottie file, varied via CSS) ── */
+[data-lp][data-pet=bird][data-state=idle]        .pet-lottie{animation:_pet_float 3s ease-in-out infinite}
+[data-lp][data-pet=bird][data-state=thinking]    .pet-lottie{animation:_pet_tilt  .6s ease-in-out infinite}
+[data-lp][data-pet=bird][data-state=analyzing]   .pet-lottie{animation:_pet_spin  2.5s linear infinite}
+[data-lp][data-pet=bird][data-state=happy]       .pet-lottie{animation:_pet_bob   .9s ease-in-out infinite;filter:drop-shadow(0 0 8px rgba(250,204,21,.7))}
+[data-lp][data-pet=bird][data-state=celebrating] .pet-lottie{animation:_pet_jump  .5s ease 8;filter:drop-shadow(0 0 12px rgba(74,222,128,.7))}
+[data-lp][data-pet=bird][data-state=playing]     .pet-lottie{animation:_pet_walk  .55s ease-in-out infinite}
+[data-lp][data-pet=bird][data-state=sleeping]    .pet-lottie{opacity:.45;filter:brightness(.6)}
+[data-lp][data-pet=bird][data-state=error]       .pet-lottie{animation:_pet_err   .4s ease 5;filter:drop-shadow(0 0 8px rgba(248,113,113,.7))}
 `
 
 const PET_EMOJI = { dog: '🐕', cat: '🐈', bird: '🦜', rabbit: '🐇', human: '🧑' }
@@ -98,6 +109,7 @@ export default function LottiePlayer({ controllerRef, petType }) {
       {!isSpritePet && (
         <div
           ref={lottieRef}
+          className="pet-lottie"
           style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
         />
       )}

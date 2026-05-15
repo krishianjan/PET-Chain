@@ -61,44 +61,56 @@ export default function SpritePlayer({ petType, animState }) {
   const { frameW, frameH, cols } = cfg
   const { row = 0, rows = 1 }   = stateCfg
 
-  // Scale to fit within 80×80 container
+  // Use exact float scale — no Math.round() accumulation errors
   const scale   = Math.min(80 / frameW, 80 / frameH)
-  const scaledW = Math.round(frameW * scale)
-  const scaledH = Math.round(frameH * scale)
-  const offsetX = Math.round((80 - scaledW) / 2)
-  const offsetY = Math.round((80 - scaledH) / 2)
+  const scaledW = frameW * scale
+  const scaledH = frameH * scale
+  const offsetX = (80 - scaledW) / 2
+  const offsetY = (80 - scaledH) / 2
 
-  // Explicit sheet dimensions — critical for correct clipping
-  const sheetW = Math.round(cols * frameW * scale)
-  const sheetH = Math.round(rows * frameH * scale)
+  // Full sheet display dimensions
+  const sheetW = cols * frameW * scale
+  const sheetH = rows * frameH * scale
 
-  // Background position selects the correct frame from the sheet
-  const bgX = -Math.round(frame * frameW * scale)
-  const bgY = -Math.round(row   * frameH * scale)
+  // Offset the img so the correct frame is visible through the clip box
+  // Uses same scale factor as sheetW/sheetH — no rounding drift
+  const imgLeft = -(frame * frameW * scale)
+  const imgTop  = -(row   * frameH * scale)
 
   return (
-    // Outer clip box — hard clips to exactly one frame. Prevents any bleed.
+    // Clip box — exactly one frame wide/tall. overflow:hidden clips the img.
     <div style={{
       position:   'absolute',
       left:       offsetX,
       top:        offsetY,
       width:      scaledW,
       height:     scaledH,
-      overflow:   'hidden',       // clips the background to frame bounds
-      contain:    'strict',       // isolates from host page CSS
+      overflow:   'hidden',
       flexShrink: 0,
     }}>
-      {/* Inner div carries the full spritesheet as background */}
-      <div style={{
-        width:              scaledW,
-        height:             scaledH,
-        backgroundImage:    `url("${sheetURL}")`,
-        backgroundRepeat:   'no-repeat',
-        backgroundSize:     `${sheetW}px ${sheetH}px`,   // explicit both dims
-        backgroundPosition: `${bgX}px ${bgY}px`,
-        imageRendering:     'pixelated',
-        willChange:         'background-position',
-      }} />
+      {/*
+        The full spritesheet image is positioned so that the target frame
+        appears at (0,0) within the clip box.
+        Using <img> with absolute positioning avoids background-repeat issues
+        where host-page CSS can override background-repeat: no-repeat.
+      */}
+      <img
+        src={sheetURL}
+        alt=""
+        draggable={false}
+        style={{
+          position:       'absolute',
+          left:           imgLeft,
+          top:            imgTop,
+          width:          sheetW,
+          height:         sheetH,
+          imageRendering: 'pixelated',
+          willChange:     'left, top',
+          userSelect:     'none',
+          pointerEvents:  'none',
+          display:        'block',
+        }}
+      />
     </div>
   )
 }
