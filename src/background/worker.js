@@ -1,5 +1,38 @@
-const BACKEND = 'http://localhost:8000'
-const OLLAMA  = 'http://localhost:11434'
+const BACKEND      = 'http://localhost:8000'
+const OLLAMA       = 'http://localhost:11434'
+// When you deploy backend publicly, change this to your hosted URL:
+// const TRACK_URL = 'https://your-app.railway.app'
+const TRACK_URL    = BACKEND
+
+// ── Install / lifecycle tracking ──────────────────────────────────────────────
+// Generates a random anonymous ID once and reuses it — no PII collected.
+async function getCID() {
+  const r = await chrome.storage.local.get('pet_cid')
+  if (r.pet_cid) return r.pet_cid
+  const id = crypto.randomUUID()
+  await chrome.storage.local.set({ pet_cid: id })
+  return id
+}
+
+async function ping(event) {
+  try {
+    const cid     = await getCID()
+    const version = chrome.runtime.getManifest().version
+    await fetch(`${TRACK_URL}/track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, version, cid }),
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch { /* tracking never blocks anything */ }
+}
+
+chrome.runtime.onInstalled.addListener(details => {
+  if (details.reason === 'install') ping('install')
+  else if (details.reason === 'update') ping('update')
+})
+
+chrome.runtime.onStartup.addListener(() => ping('active'))
 
 // Keep service worker alive
 chrome.alarms.create('pet_alive', { periodInMinutes: 0.4 })

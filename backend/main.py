@@ -1,4 +1,4 @@
-import os
+import os, json, time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -87,3 +87,73 @@ async def evaluate(req: EvalReq):
 @app.get("/health")
 def health():
     return {"ok": True, "groq": bool(os.getenv("GROQ_API_KEY")), "sessions": len(memory._store)}
+
+# ── Install / event tracking ──────────────────────────────────────────────────
+TRACK_FILE = os.path.join(os.path.dirname(__file__), 'installs.json')
+
+def _load_track():
+    try:
+        return json.load(open(TRACK_FILE))
+    except Exception:
+        return {"installs": 0, "uninstalls": 0, "updates": 0, "events": []}
+
+def _save_track(data):
+    # Keep only last 2000 events to prevent file bloat
+    data["events"] = data["events"][-2000:]
+    json.dump(data, open(TRACK_FILE, 'w'), indent=2)
+
+class TrackReq(BaseModel):
+    event:   str           # "install" | "update" | "uninstall" | "active"
+    version: str           = "unknown"
+    cid:     str           = ""   # anonymous client id (random UUID, no PII)
+    country: Optional[str] = None
+
+@app.post("/track")
+def track(req: TrackReq):
+    data = _load_track()
+    event = req.event.lower()
+    if event in ("install", "uninstalls", "update"):
+        data[event if event != "uninstalls" else "uninstalls"] = data.get(event if event != "uninstalls" else "uninstalls", 0) + 1
+    if event == "install":
+        data["installs"] = data.get("installs", 0) + 1
+    elif event == "uninstall":
+        data["uninstalls"] = data.get("uninstalls", 0) + 1
+    elif event == "update":
+        data["updates"] = data.get("updates", 0) + 1
+
+    data["events"].append({
+        "event":   event,
+        "version": req.version,
+        "cid":     req.cid[:36],   # UUID only, no extra data
+        "ts":      int(time.time()),
+    })
+    _save_track(data)
+    return {"ok": True}
+
+@app.get("/stats")
+def stats():
+    data = _load_track()
+    events = data.get("events", [])
+
+    # Unique installs by client id
+    unique_installers = len({e["cid"] for e in events if e["event"] == "install" and e.get("cid")})
+
+    # Active last 7 days
+    week_ago = time.time() - 7 * 86400
+    recent_active = len({e["cid"] for e in events if e["ts"] > week_ago and e["event"] == "active" and e.get("cid")})
+
+    # Version distribution from installs
+    versions = {}
+    for e in events:
+        if e["event"] in ("install", "active"):
+            versions[e["version"]] = versions.get(e["version"], 0) + 1
+
+    return {
+        "installs":         data.get("installs", 0),
+        "uninstalls":       data.get("uninstalls", 0),
+        "updates":          data.get("updates", 0),
+        "unique_installers": unique_installers,
+        "active_7d":        recent_active,
+        "total_events":     len(events),
+        "version_breakdown": dict(sorted(versions.items(), key=lambda x: -x[1])[:10]),
+    }
