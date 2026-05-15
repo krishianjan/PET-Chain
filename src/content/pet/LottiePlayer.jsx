@@ -87,7 +87,7 @@ export default function LottiePlayer({ controllerRef, petType }) {
       data-lp="1"
       data-state="idle"
       data-pet={petType}
-      style={{ width: 80, height: 80, position: 'relative', userSelect: 'none' }}
+      style={{ width: 80, height: 80, position: 'relative', userSelect: 'none', overflow: 'hidden', contain: 'layout' }}
     >
       {/* Sprite renderer for rabbit/human — shown instead of Lottie */}
       {isSpritePet && (

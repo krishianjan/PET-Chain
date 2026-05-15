@@ -4,15 +4,17 @@ import lottie from 'lottie-web'
 import { recordRewrite, recordScore, recordInject } from '../../engines/metrics_store'
 import selectorsConfig from '../../../selectors.config.json'
 
+const PERSIST_KEY = 'pet_sidebar_state_v1'
+
 export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petType, keys, setKeys, nextStep, clearNext, onPetSelect }) {
   const [view,      setView]      = useState('main')
   const [rewrites,  setRewrites]  = useState([])
   const [score,     setScore]     = useState(null)
   const [loading,   setLoading]   = useState(false)
   const [status,    setStatus]    = useState('Ready')
-  const [copied,    setCopied]    = useState(null)   // id of card just copied
-  const [editing,   setEditing]   = useState(null)   // id of card being refined
-  const [editTexts, setEditTexts] = useState({})     // id → edited prompt text
+  const [copied,    setCopied]    = useState(null)
+  const [editing,   setEditing]   = useState(null)
+  const [editTexts, setEditTexts] = useState({})
 
   const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
   const sizeRef   = useRef({ w: 340, h: 520 })
@@ -22,11 +24,34 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const doff      = useRef({ x:0, y:0 })
   const rstart    = useRef({ x:0, y:0, w:0, h:0 })
 
-  // Stores the user's ORIGINAL raw question — never overwritten by injected prompt
   const originalQ = useRef('')
 
-  const apiKey = keys.groq || keys.openai || keys.deepseek
+  const apiKey    = keys.groq || keys.openai || keys.deepseek
   const hasEngine = !!(keys.ollama_model || apiKey)
+
+  // ── Restore persisted state on mount (survives minimize + page refresh) ───
+  useEffect(() => {
+    chrome.storage.local.get(PERSIST_KEY, r => {
+      const saved = r[PERSIST_KEY]
+      if (!saved) return
+      if (saved.rewrites?.length) { setRewrites(saved.rewrites); setStatus(`✓ ${saved.rewrites.length} prompts restored`) }
+      if (saved.score)              setScore(saved.score)
+      if (saved.originalQ)          originalQ.current = saved.originalQ
+    })
+  }, [])
+
+  // ── Persist rewrites + score whenever they change ─────────────────────────
+  useEffect(() => {
+    if (!rewrites.length && !score) return
+    chrome.storage.local.set({
+      [PERSIST_KEY]: {
+        rewrites,
+        score,
+        originalQ: originalQ.current,
+        savedAt:   Date.now(),
+      }
+    })
+  }, [rewrites, score])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 

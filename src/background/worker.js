@@ -1112,11 +1112,12 @@ function ruleScore(question, response) {
 
 function getKeys() {
   return new Promise(res =>
-    chrome.storage.local.get(['pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model'], r =>
+    chrome.storage.local.get(['pet_key_groq','pet_key_openai','pet_key_deepseek','pet_key_claude','pet_ollama_model'], r =>
       res({
         groq:         r.pet_key_groq         || null,
         openai:       r.pet_key_openai        || null,
         deepseek:     r.pet_key_deepseek      || null,
+        claude:       r.pet_key_claude        || null,
         ollama_model: r.pet_ollama_model      || null,
       })
     )
