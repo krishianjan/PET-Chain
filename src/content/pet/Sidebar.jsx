@@ -107,10 +107,10 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     const t = q.toLowerCase()
     if (/\b(stock|invest|market|finance|money|crypto|bitcoin|return|profit|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound|asset)\b/.test(t)) return 'finance'
     if (/\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|fails|undefined|null pointer)\b/.test(t)) return 'code_debug'
-    if (/\b(build|create|make|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm)\b/.test(t)) return 'code_build'
+    if (/\b(science|biology|chemistry|physics|quantum|atom|molecule|cell|evolution|climate|astronomy|genetics|experiment|hypothesis|reaction|compound|element)\b/.test(t)) return 'science'
     if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic)\b/.test(t)) return 'math'
-    if (/\b(science|biology|chemistry|physics|quantum|atom|molecule|cell|evolution|climate|astronomy|genetics|experiment|hypothesis)\b/.test(t)) return 'science'
     if (/\b(health|diet|exercise|medical|disease|symptom|treatment|nutrition|fitness|mental|therapy|medicine|workout|calories|sleep)\b/.test(t)) return 'health'
+    if (/\b(build|create|make|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm)\b/.test(t)) return 'code_build'
     if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|script|copy|caption|headline)\b/.test(t)) return 'writing'
     if (/\b(learn|teach|explain|what is|how does|how do|understand|tutorial|concept|beginner|study|course)\b/.test(t)) return 'learn'
     return 'general'
