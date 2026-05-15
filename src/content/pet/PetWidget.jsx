@@ -56,23 +56,41 @@ export default function PetWidget() {
     if (!sel?.response) return
 
     let deb = null, lastLen = 0
+    // Track last scored content — prevents re-scoring same response on minimize/restore
+    let lastScoredText = ''
 
     const obs = new MutationObserver(() => {
-      const els = document.querySelectorAll(sel.response)
-      const el  = els.length ? els[els.length - 1] : null
+      // Only observe actual LLM response containers, not the whole page
+      // (sidebar open/close mutates DOM but not the response elements)
+      const selectors = sel.response.split(',').map(s => s.trim())
+      let el = null
+      for (const s of selectors) {
+        const els = document.querySelectorAll(s)
+        if (els.length) { el = els[els.length - 1]; break }
+      }
       if (!el) return
       const len = el.textContent.length
       if (len === lastLen || len < 40) return
       lastLen = len
       clearTimeout(deb)
       deb = setTimeout(async () => {
-        // Capture original prompt from textarea for scoring context
-        const txEl  = sel.textarea ? document.querySelector(sel.textarea) : null
+        const text = el.textContent.trim()
+        // Skip if this is the same response we already scored (minimize/restore)
+        if (text === lastScoredText) return
+        lastScoredText = text
+
+        // Try multiple textarea selectors (comma-separated)
+        const txSelectors = sel.textarea ? sel.textarea.split(',').map(s => s.trim()) : []
+        let txEl = null
+        for (const s of txSelectors) {
+          txEl = document.querySelector(s)
+          if (txEl) break
+        }
         const prompt = txEl ? (txEl.value || txEl.textContent || '').trim() : ''
         if (prompt) setQ(prompt)
 
         const key = keys.groq || keys.openai || keys.deepseek
-        const r   = await evaluate(el.textContent, key)
+        const r   = await evaluate(text, key)
         if (r?.score != null) {
           setNext(r)
           ctrl.current?.setState(r.score >= 75 ? 'celebrating' : 'playing')

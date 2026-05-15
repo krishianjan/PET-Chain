@@ -70,16 +70,20 @@ async function post(path, body) {
 }
 
 // ── Domain detection ──────────────────────────────────────────────────────
+// Order: specific STEM/science domains FIRST, generic "build/make" LAST
+// This prevents "make a reaction chain" from matching code_build
 function detectDomain(p) {
   const t = p.toLowerCase()
-  if (/\b(stock|invest|market|finance|money|crypto|bitcoin|return|profit|loss|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound|asset)\b/.test(t)) return 'finance'
-  if (/\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|fails|undefined|null pointer)\b/.test(t)) return 'code_debug'
-  if (/\b(build|create|make|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm)\b/.test(t)) return 'code_build'
-  if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic)\b/.test(t)) return 'math'
-  if (/\b(science|biology|chemistry|physics|quantum|atom|molecule|cell|evolution|climate|astronomy|genetics|experiment|hypothesis)\b/.test(t)) return 'science'
-  if (/\b(health|diet|exercise|medical|disease|symptom|treatment|nutrition|fitness|mental|therapy|medicine|workout|calories|sleep)\b/.test(t)) return 'health'
-  if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|script|copy|caption|headline)\b/.test(t)) return 'writing'
-  if (/\b(learn|teach|explain|what is|how does|how do|understand|tutorial|concept|beginner|study|course)\b/.test(t)) return 'learn'
+  if (/\b(stock|invest|market|finance|money|crypto|bitcoin|return|profit|loss|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound interest|asset|forex|inflation|recession)\b/.test(t)) return 'finance'
+  if (/\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|fails|undefined|null pointer|stack trace|segfault|memory leak)\b/.test(t)) return 'code_debug'
+  // Science checked BEFORE code_build — "make a reaction" is science, not coding
+  if (/\b(chemistry|chemical|compound|reaction|molecule|atom|periodic table|organic|biochem|lab test|experiment|titration|bond|enzyme|protein|dna|rna|genetics|biology|cell|evolution|ecology|physics|quantum|mechanics|thermodynamics|astronomy|astrophysics|geology|compound|element|valence|isotope)\b/.test(t)) return 'science'
+  if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic|linear algebra|differential|topology|number theory)\b/.test(t)) return 'math'
+  if (/\b(health|diet|exercise|medical|disease|symptom|treatment|nutrition|fitness|mental health|therapy|medicine|workout|calories|sleep|supplement|medication|dosage|chronic|vaccine)\b/.test(t)) return 'health'
+  if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|script|copy|caption|headline|newsletter|proposal|resume|cover letter)\b/.test(t)) return 'writing'
+  // code_build last among specific domains — "make" is too generic a word
+  if (/\b(build|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm|microservice|architecture|framework)\b/.test(t)) return 'code_build'
+  if (/\b(learn|teach|explain|what is|how does|how do|understand|tutorial|concept|beginner|study|course|guide|introduction|overview)\b/.test(t)) return 'learn'
   return 'general'
 }
 

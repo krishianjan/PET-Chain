@@ -1,5 +1,5 @@
 {
-    "version": 1,
+    "version": 2,
     "platforms": {
         "chatgpt": {
             "textarea": "#prompt-textarea",
@@ -20,10 +20,16 @@
             "model": ".model-selector"
         },
         "deepseek": {
-            "textarea": "#chat-input",
-            "response": ".ds-markdown",
-            "sendBtn": "[aria-label='Send']",
-            "model": ".model-name"
+            "textarea": "textarea#chat-input, textarea[placeholder], div[contenteditable='true'][data-lexical-editor]",
+            "response": ".ds-markdown, .markdown-body, [class*='markdown'], [class*='message-content']",
+            "sendBtn": "[aria-label='Send'], button[type='submit'], .send-btn",
+            "model": ".model-name, [class*='model']"
+        },
+        "perplexity": {
+            "textarea": "textarea[placeholder*='Ask'], textarea[name='q'], div[contenteditable='true']",
+            "response": ".prose, [class*='answer'], [class*='markdown'], [data-testid='answer']",
+            "sendBtn": "button[aria-label='Submit'], button[type='submit']",
+            "model": "[class*='model'], [class*='focus']"
         }
     }
 }
