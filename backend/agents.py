@@ -40,16 +40,28 @@ Return ONLY valid JSON:
 {
   "domain": "<specific domain>",
   "sub_domain": "<specific sub-area>",
-  "task": "<learn|debug|build|analyze|write|calculate|compare|create|explain>",
+  "task": "<learn|debug|build|analyze|write|calculate|compare|create|explain|script|market|pitch|social|creative>",
   "complexity": <1-10>,
   "techniques": [
-    {"name": "<Technique1>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<expert role>"},
-    {"name": "<Technique2>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<expert role>"},
-    {"name": "<Technique3>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<expert role>"}
+    {"name": "<Technique1>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<exact expert role>"},
+    {"name": "<Technique2>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<exact expert role>"},
+    {"name": "<Technique3>", "label": "<emoji + label>", "why": "<why for THIS question>", "persona": "<exact expert role>"}
   ]
 }
 
-Pick 3 DIFFERENT techniques from: Chain-of-Thought, Socratic Method, Feynman Technique, Few-Shot Examples, Tree of Thought, Devil's Advocate, Expert Panel, Comparative Analysis, First Principles, Role Reversal"""
+PERSONA RULES — match persona to task EXACTLY:
+- script/video/reel/storyboard → "Senior Creative Director", "Video Producer", "Cinematographer"
+- marketing/brand/launch/campaign/LinkedIn → "Growth Marketing Director", "Brand Strategist", "Performance Marketer"
+- pitch/investor/startup/funding → "VC Partner", "Startup Advisor", "Pitch Coach"
+- finance/invest/stock/crypto → "CFA Analyst", "Portfolio Manager", "Risk Analyst"
+- code/debug/build/api → "Staff Engineer", "Senior Architect", "Tech Lead"
+- writing/copy/essay → "Senior Editor", "Copywriter", "Content Strategist"
+- science/research → "Research Scientist", "Professor", "Domain Expert"
+NEVER assign a finance or tech persona to a creative/marketing question.
+
+TECHNIQUE POOL — pick the 3 that best match the task:
+General: Chain-of-Thought, Socratic Method, Feynman Technique, Few-Shot Examples, Tree of Thought, Devil's Advocate, Expert Panel, Comparative Analysis, First Principles, Role Reversal
+Creative/Marketing: Scene-Based Breakdown, Hook-Problem-Solution-CTA, AIDA Framework, Storyboard Method, Voice-Tone Calibration, Before-After-Bridge, Problem-Agitate-Solve"""
 
 async def classify_intent_llm(prompt: str, api_key: str) -> dict:
     try:
@@ -65,42 +77,87 @@ async def classify_intent_llm(prompt: str, api_key: str) -> dict:
 
 def fast_intent_fallback(prompt: str) -> dict:
     lower = prompt.lower()
-    if re.search(r'\b(stock|invest|finance|money|crypto|portfolio|roi|bond|etf|dividend|asset|forex)\b', lower):
+
+    # ── Creative / Video / Script — checked FIRST (before "write" catches "script") ──
+    if re.search(r'\b(reel|video script|storyboard|veo|sora|kling|runway|b.roll|cinemat|voiceover|narration|viral video|tiktok|instagram reel|youtube short|short form|scene breakdown|shot list|hook line|ad creative|documentary)\b', lower):
+        return {"domain":"creative","task":"script","techniques":[
+            {"name":"Scene-Based Breakdown","label":"🎬 Scene-by-Scene Director","why":"Each scene gets visual/audio/text direction — production-ready output","persona":"Senior Creative Director"},
+            {"name":"Hook-Problem-Solution-CTA","label":"⚡ Viral Hook Framework","why":"The exact structure that makes content stop the scroll","persona":"Viral Content Strategist"},
+            {"name":"Storyboard Method","label":"🎞 Visual-First Storyboard","why":"Visual-first planning before writing a single word of copy","persona":"Video Producer"},
+        ]}
+
+    # ── Marketing / Brand / Launch — before generic "write" ──
+    if re.search(r'\b(market|brand|launch|campaign|go.to.market|gtm|positioning|messaging|tagline|press release|growth hack|saas marketing|product hunt|go to market|audience targeting|growth strategy|brand voice|content strategy|demand gen)\b', lower):
+        return {"domain":"marketing","task":"market","techniques":[
+            {"name":"Hook-Problem-Solution-CTA","label":"⚡ Launch Playbook","why":"Proven launch framework — hook the audience, name the pain, show the solution","persona":"Growth Marketing Director"},
+            {"name":"AIDA Framework","label":"🎯 AIDA Copywriter","why":"Attention→Interest→Desire→Action — the copywriting framework that converts","persona":"Performance Marketer"},
+            {"name":"Voice-Tone Calibration","label":"🗣 Brand Voice Builder","why":"Define the voice before creating any content — consistency drives recognition","persona":"Brand Strategist"},
+        ]}
+
+    # ── Startup / Investor / Pitch ──
+    if re.search(r'\b(pitch deck|investor pitch|startup pitch|seed round|series [a-c]|vc funding|product market fit|traction metrics|unit economics|tam sam som|fundraising|accelerator|demo day|term sheet)\b', lower):
+        return {"domain":"startup","task":"pitch","techniques":[
+            {"name":"Problem-Agitate-Solve","label":"📊 Investor Pitch Structure","why":"VCs pattern-match against this structure — problem clarity is the #1 filter","persona":"VC Partner"},
+            {"name":"Few-Shot Examples","label":"🎯 Winning Pitch Reference","why":"Successful pitches follow predictable patterns — anchor to those","persona":"Startup Advisor"},
+            {"name":"Devil's Advocate","label":"😈 VC Red Flags","why":"Anticipate every hard question before it's asked","persona":"Pitch Coach"},
+        ]}
+
+    # ── Social Media Content ──
+    if re.search(r'\b(linkedin post|twitter thread|reddit post|instagram caption|tweet|threads post|x post|social post|content calendar|viral post|engagement post|thought leadership|personal brand)\b', lower):
+        return {"domain":"social_media","task":"social","techniques":[
+            {"name":"Hook-Problem-Solution-CTA","label":"⚡ Viral Post Formula","why":"The structure behind every post that gets shared","persona":"LinkedIn Growth Expert"},
+            {"name":"Before-After-Bridge","label":"🌉 Story Arc Post","why":"Before/After transformation is the most shareable content pattern","persona":"Personal Brand Strategist"},
+            {"name":"Voice-Tone Calibration","label":"🗣 Platform Voice","why":"Each platform has a different register — calibrate before writing","persona":"Social Media Director"},
+        ]}
+
+    # ── Finance ──
+    if re.search(r'\b(stock|invest|finance|money|crypto|portfolio|roi|bond|etf|dividend|asset|forex|trading|valuation|p/e|earnings|market cap)\b', lower):
         return {"domain":"finance","task":"analyze","techniques":[
             {"name":"Chain-of-Thought","label":"⛓ Financial Analysis","why":"Step-by-step financial reasoning","persona":"CFA Analyst"},
             {"name":"Few-Shot Examples","label":"🎯 Worked Examples","why":"Real numbers anchor concepts","persona":"Portfolio Manager"},
             {"name":"Devil's Advocate","label":"😈 Bear Case","why":"Stress-tests assumptions","persona":"Risk Analyst"},
         ]}
-    if re.search(r'\b(chemistry|chemical|compound|reaction|molecule|atom|biology|physics|quantum|genetics|lab|experiment)\b', lower):
+
+    # ── Science ──
+    if re.search(r'\b(chemistry|chemical|compound|reaction|molecule|atom|biology|physics|quantum|genetics|lab|experiment|cell|protein|dna|rna|thermodynamics|astronomy)\b', lower):
         return {"domain":"science","task":"learn","techniques":[
             {"name":"Socratic Method","label":"🔬 Guided Discovery","why":"Builds lab intuition","persona":"Research Scientist"},
             {"name":"Feynman Technique","label":"📚 First Principles","why":"Explains mechanism deeply","persona":"Science Educator"},
             {"name":"Chain-of-Thought","label":"⛓ Step-by-Step","why":"Shows every reasoning step","persona":"Professor"},
         ]}
-    if re.search(r'\b(fix|debug|error|bug|crash|exception|traceback|broken|not working)\b', lower):
+
+    # ── Code Debug ──
+    if re.search(r'\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|stack overflow|segfault|memory leak)\b', lower):
         return {"domain":"software","task":"debug","techniques":[
             {"name":"Chain-of-Thought","label":"⛓ Root Cause Analysis","why":"Systematic elimination","persona":"Staff Engineer"},
             {"name":"Tree of Thought","label":"🌳 Fix Pathfinder","why":"Immediate vs root fix","persona":"Senior Engineer"},
             {"name":"Few-Shot Examples","label":"⚡ Pattern Fix","why":"Shows bug pattern and fix","persona":"Tech Lead"},
         ]}
-    if re.search(r'\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|integral|derivative)\b', lower):
+
+    # ── Math ──
+    if re.search(r'\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|integral|derivative|matrix|formula)\b', lower):
         return {"domain":"mathematics","task":"calculate","techniques":[
             {"name":"Chain-of-Thought","label":"⛓ Show-Every-Step","why":"Visible reasoning per line","persona":"Mathematics Professor"},
             {"name":"Few-Shot Examples","label":"🎯 Worked Examples","why":"Two examples then yours","persona":"Math Tutor"},
             {"name":"Feynman Technique","label":"📚 Build Intuition","why":"Why before how","persona":"Math Educator"},
         ]}
-    if re.search(r'\b(write|essay|blog|email|letter|cover letter|resume|article|draft|copy|script|proposal|report)\b', lower):
+
+    # ── Writing (generic — after script/marketing to avoid misclassification) ──
+    if re.search(r'\b(write|essay|blog|email|letter|cover letter|resume|article|draft|copy|proposal|report|copywrite|newsletter)\b', lower):
         return {"domain":"writing","task":"write","techniques":[
             {"name":"Chain-of-Thought","label":"⛓ Structure-First","why":"Outline before writing","persona":"Senior Content Strategist"},
-            {"name":"Few-Shot Examples","label":"🎯 Style-Matched","why":"Shows target tone first","persona":"Editor"},
-            {"name":"Expert Panel","label":"🎓 Multi-Angle Review","why":"Multiple expert voices","persona":"Editorial Panel"},
+            {"name":"Few-Shot Examples","label":"🎯 Style-Matched","why":"Shows target tone first","persona":"Senior Editor"},
+            {"name":"Voice-Tone Calibration","label":"🗣 Voice-First Draft","why":"Define voice and audience before writing a word","persona":"Copywriter"},
         ]}
-    if re.search(r'\b(build|develop|implement|code|app|website|api|database|deploy|architecture|microservice)\b', lower):
+
+    # ── Code Build ──
+    if re.search(r'\b(build|develop|implement|code|app|website|api|database|deploy|architecture|microservice|backend|frontend)\b', lower):
         return {"domain":"software","task":"build","techniques":[
             {"name":"Chain-of-Thought","label":"⛓ Spec-First","why":"Design before code","persona":"Senior Architect"},
             {"name":"Tree of Thought","label":"🌳 Multi-Approach","why":"3 paths before committing","persona":"Tech Lead"},
             {"name":"Few-Shot Examples","label":"🎯 Pattern-First","why":"Shows the pattern then applies","persona":"Senior Engineer"},
         ]}
+
     return {"domain":"general","task":"explore","techniques":[
         {"name":"Chain-of-Thought","label":"⛓ Deep Analysis","why":"Systematic reasoning","persona":"Expert Consultant"},
         {"name":"Devil's Advocate","label":"😈 Contrarian","why":"Challenges assumptions","persona":"Critical Thinker"},

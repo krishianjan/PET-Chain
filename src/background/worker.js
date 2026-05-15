@@ -253,19 +253,44 @@ async function post(path, body) {
 }
 
 // ── Domain detection ──────────────────────────────────────────────────────
-// Order: specific STEM/science domains FIRST, generic "build/make" LAST
-// This prevents "make a reaction chain" from matching code_build
+// Order matters: creative/marketing first, then STEM, code_build last.
+// "create a reel script" → script (not code_build from "create")
+// "market this product" → marketing (not finance from "market")
 function detectDomain(p) {
   const t = p.toLowerCase()
-  if (/\b(stock|invest|market|finance|money|crypto|bitcoin|return|profit|loss|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound interest|asset|forex|inflation|recession)\b/.test(t)) return 'finance'
+
+  // ── Creative / Video / Script — highest priority ──────────────────────────
+  // "script" keyword handled here before code_build can catch it
+  if (/\b(reel|video script|storyboard|veo\s*3?|sora|kling|runway|b.?roll|cinemat|voiceover|narration|viral video|tiktok|instagram reel|youtube short|short.?form video|scene breakdown|shot list|hook line|ad creative|documentary)\b/.test(t)) return 'script'
+
+  // ── Marketing / Launch / Brand ────────────────────────────────────────────
+  // "market" keyword handled here before finance can catch it
+  if (/\b(go.?to.?market|gtm|brand launch|marketing campaign|positioning statement|messaging framework|tagline|press release|growth hack|saas marketing|product hunt|audience targeting|growth strategy|brand voice|content strategy|demand gen|launch plan)\b/.test(t)) return 'marketing'
+
+  // ── Startup / Investor / Pitch ────────────────────────────────────────────
+  if (/\b(pitch deck|investor pitch|startup pitch|seed round|series [a-c]\b|vc funding|product.?market.?fit|traction metrics|unit economics|tam\b|fundraising|accelerator|demo day|term sheet|angel investor)\b/.test(t)) return 'pitch'
+
+  // ── Social Media Content ──────────────────────────────────────────────────
+  if (/\b(linkedin post|twitter thread|reddit post|instagram caption|viral post|engagement post|thought leadership|personal brand post|content calendar|social media post)\b/.test(t)) return 'social_media'
+
+  // ── Finance (after marketing — "market" is not always finance) ───────────
+  if (/\b(stock|invest|finance|money|crypto|bitcoin|return|profit|loss|portfolio|dividend|equity|fund|trade|roi|bond|etf|share|wealth|budget|saving|bank|interest rate|compound interest|asset|forex|inflation|recession|p\/e ratio|earnings)\b/.test(t)) return 'finance'
+
+  // ── Code debug ────────────────────────────────────────────────────────────
   if (/\b(fix|debug|error|bug|crash|exception|traceback|broken|not working|fails|undefined|null pointer|stack trace|segfault|memory leak)\b/.test(t)) return 'code_debug'
-  // Science checked BEFORE code_build — "make a reaction" is science, not coding
-  if (/\b(chemistry|chemical|compound|reaction|molecule|atom|periodic table|organic|biochem|lab test|experiment|titration|bond|enzyme|protein|dna|rna|genetics|biology|cell|evolution|ecology|physics|quantum|mechanics|thermodynamics|astronomy|astrophysics|geology|compound|element|valence|isotope)\b/.test(t)) return 'science'
-  if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic|linear algebra|differential|topology|number theory)\b/.test(t)) return 'math'
+
+  // ── Science — before code_build ("reaction chain" is science not coding) ─
+  if (/\b(chemistry|chemical|compound|reaction|molecule|atom|periodic table|organic|biochem|lab test|experiment|titration|enzyme|protein|dna|rna|genetics|biology|cell|evolution|ecology|physics|quantum|mechanics|thermodynamics|astronomy|astrophysics|geology|element|valence|isotope)\b/.test(t)) return 'science'
+
+  if (/\b(math|calculate|equation|algebra|calculus|geometry|probability|statistics|proof|solve|integral|derivative|matrix|formula|arithmetic|linear algebra|differential|topology)\b/.test(t)) return 'math'
   if (/\b(health|diet|exercise|medical|disease|symptom|treatment|nutrition|fitness|mental health|therapy|medicine|workout|calories|sleep|supplement|medication|dosage|chronic|vaccine)\b/.test(t)) return 'health'
-  if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|script|copy|caption|headline|newsletter|proposal|resume|cover letter)\b/.test(t)) return 'writing'
-  // code_build last among specific domains — "make" is too generic a word
-  if (/\b(build|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|script|function|algorithm|microservice|architecture|framework)\b/.test(t)) return 'code_build'
+
+  // ── Writing (generic copy) — after script/marketing to avoid overlap ──────
+  if (/\b(write|essay|blog|email|letter|content|article|draft|copywrite|story|poem|copy|caption|headline|newsletter|proposal|resume|cover letter)\b/.test(t)) return 'writing'
+
+  // ── Code build — last, "make/create" too generic without other signals ────
+  if (/\b(build|develop|implement|code|app|website|api|database|backend|frontend|scaffold|deploy|program|function|algorithm|microservice|architecture|framework)\b/.test(t)) return 'code_build'
+
   if (/\b(learn|teach|explain|what is|how does|how do|understand|tutorial|concept|beginner|study|course|guide|introduction|overview)\b/.test(t)) return 'learn'
   return 'general'
 }
@@ -931,7 +956,465 @@ function instant(prompt) {
     ...UNIVERSAL_EXTRAS(prompt)
   ])
 
-  // science, health, or general — all use the same 3 universal techniques
+  // ── Video / Reel / Script ────────────────────────────────────────────────
+  if (domain === 'script') return pickThree([
+    {
+      id: 'r1', technique: 'Scene-Based Breakdown', recommended: true,
+      label: '🎬 Creative Director — Scene-by-Scene',
+      why: 'Production-ready script with visual direction for every scene',
+      prompt: [
+        'You are a Senior Creative Director with 10 years producing viral short-form content for tech products, SaaS tools, and developer launches.',
+        '',
+        'BRIEF: ' + prompt,
+        '',
+        'Deliver a complete production-ready video script:',
+        'FORMAT: 40-60 second vertical reel (9:16) for Instagram / TikTok / YouTube Shorts',
+        '',
+        'SCENE 1 — THE HOOK (0-3s)',
+        '  Visual: [exact scene — camera angle, action, setting, lighting]',
+        '  Text overlay: [exact words on screen]',
+        '  Voiceover: [exact narration]',
+        '  Hook psychology: [why this stops the scroll in 2 seconds]',
+        '',
+        'SCENE 2 — THE PROBLEM (3-10s)',
+        '  Visual: [exact scene]',
+        '  Text overlay: [exact words]',
+        '  Voiceover: [exact narration]',
+        '',
+        'SCENE 3 — THE SOLUTION / DEMO (10-25s)',
+        '  Visual: [exact demo scene — what the viewer sees happen on screen]',
+        '  Text overlay: [exact words]',
+        '  Voiceover: [exact narration]',
+        '',
+        'SCENE 4 — PROOF + FEATURES (25-40s)',
+        '  Visual: [montage direction — 3 fast cuts]',
+        '  Text overlay: [key callouts for each cut]',
+        '  Voiceover: [exact narration]',
+        '',
+        'SCENE 5 — CTA (40-55s)',
+        '  Visual: [closing scene]',
+        '  Text overlay: [CTA — be specific]',
+        '  Voiceover: [closing line]',
+        '',
+        'VEO 3 / AI VIDEO GENERATION PROMPT:',
+        '  [Single complete prompt — paste directly into Veo 3, Sora, or Kling]',
+        '  [Include: camera style, lighting, color grade, mood, subject actions, text overlays]',
+        '',
+        'PRODUCTION NOTES:',
+        '  Music: [BPM, genre, mood, reference track]',
+        '  Color grade: [exact visual style]',
+        '  Font style: [overlay typography]',
+        '  Pacing: [cuts per second, energy arc through the video]',
+      ].join('\n'),
+    },
+    {
+      id: 'r2', technique: 'Hook-Problem-Solution-CTA', recommended: false,
+      label: '⚡ Viral Formula — Hook→Problem→Solution→CTA',
+      why: 'The exact structure behind every piece of content that gets shared',
+      prompt: [
+        'You are a Viral Content Strategist who has launched 50+ products on TikTok and Instagram.',
+        '',
+        'Content brief: ' + prompt,
+        '',
+        'Build this using the Hook-Problem-Solution-CTA framework:',
+        '',
+        'THE HOOK (first 2 seconds — make them stop scrolling):',
+        '  Pattern interrupt: [unexpected visual or statement]',
+        '  Hook line options (write 5, rank them):',
+        '    1. [bold claim]',
+        '    2. [question that creates curiosity]',
+        '    3. [contrarian statement]',
+        '    4. [relatable frustration]',
+        '    5. [surprising fact or number]',
+        '  Winner: [#n] because [psychology]',
+        '',
+        'THE PROBLEM (5-8 seconds — make them feel it):',
+        '  Pain point: [exact frustration your audience already feels]',
+        '  Agitation: [make the pain vivid — what they lose by not solving it]',
+        '  Transition line: [bridge to solution]',
+        '',
+        'THE SOLUTION (10-30 seconds — demo it):',
+        '  The reveal: [exact words that introduce the solution]',
+        '  Demo narrative: [what happens visually + what the voiceover says]',
+        '  Key proof point: [the ONE thing that makes it believable]',
+        '',
+        'THE CTA (5 seconds — one action only):',
+        '  Primary CTA: [one specific action]',
+        '  CTA copy: [exact words — no "check the link in bio" vagueness]',
+        '',
+        'FULL SCRIPT: [write the complete 40-60 second script end to end]',
+        '',
+        'AI VIDEO PROMPT (for Veo 3 / Sora):',
+        '  [Complete prompt to generate this video — include style, mood, all scenes]',
+      ].join('\n'),
+    },
+    {
+      id: 'r3', technique: 'Storyboard Method', recommended: false,
+      label: '🎞 Storyboard-First Visual Plan',
+      why: 'Plan visuals before writing copy — creates more cinematic, shareable content',
+      prompt: [
+        'You are an award-winning Video Producer. Your process: visual-first, then words.',
+        '',
+        'Project: ' + prompt,
+        '',
+        'VISUAL STORYBOARD (sketch each frame in words):',
+        '',
+        'Frame 1: [exact visual — describe as if directing a camera crew]',
+        'Frame 2: [visual]',
+        'Frame 3: [visual]',
+        'Frame 4: [visual]',
+        'Frame 5: [visual — closing]',
+        '',
+        'For each frame, add:',
+        '  Audio: [music / sound effect / silence]',
+        '  Text: [overlay, if any]',
+        '  Duration: [seconds]',
+        '  Transition: [cut / fade / zoom]',
+        '',
+        'AUDIO TRACK DIRECTION:',
+        '  Opening: [sound that sets mood]',
+        '  Build: [how audio intensifies]',
+        '  Peak: [emotional high point — sound + visual sync]',
+        '  Close: [resolution]',
+        '',
+        'FINAL COPY (write after visuals are locked):',
+        '  Headline: [3 options]',
+        '  Body copy: [full narration script]',
+        '  CTA: [exact words]',
+        '',
+        'ONE-SHOT AI VIDEO PROMPT:',
+        '  [Complete Veo 3 / Sora / Kling prompt — describes the full video in one block]',
+      ].join('\n'),
+    },
+    ...UNIVERSAL_EXTRAS(prompt)
+  ])
+
+  // ── Marketing / Brand / Launch ───────────────────────────────────────────
+  if (domain === 'marketing') return pickThree([
+    {
+      id: 'r1', technique: 'Hook-Problem-Solution-CTA', recommended: true,
+      label: '⚡ Growth Marketing Launch Plan',
+      why: 'Proven launch framework — hook the audience, name the pain, show the solution',
+      prompt: [
+        'You are a Growth Marketing Director who has launched 20+ B2B SaaS products.',
+        '',
+        'Marketing task: ' + prompt,
+        '',
+        'Build a complete launch strategy:',
+        '',
+        'AUDIENCE DEFINITION',
+        '  Primary audience: [specific person — job title, situation, daily frustration]',
+        '  Secondary audience: [adjacent segment]',
+        '  Where they live online: [exact communities, subreddits, LinkedIn groups, newsletters]',
+        '',
+        'CORE MESSAGE (fill this in first — everything else follows from it):',
+        '  The problem we solve: [one sentence, no jargon]',
+        '  Our solution: [one sentence]',
+        '  Why us specifically: [differentiator that is hard to copy]',
+        '  Social proof: [most compelling proof point]',
+        '',
+        'CHANNEL PLAN (top 3 only):',
+        '  Channel 1: [where] → [message] → [CTA] → [metric to watch]',
+        '  Channel 2: [where] → [message] → [CTA] → [metric to watch]',
+        '  Channel 3: [where] → [message] → [CTA] → [metric to watch]',
+        '',
+        'CONTENT CALENDAR (week 1):',
+        '  Day 1: [post type + exact copy for each channel]',
+        '  Day 3: [post type + copy]',
+        '  Day 5: [post type + copy]',
+        '  Day 7: [post type + copy]',
+        '',
+        'LAUNCH METRICS:',
+        '  North star metric: [the one number that matters]',
+        '  Week 1 target: [specific number]',
+        '  What success looks like in 30 days: [specific, measurable]',
+        '',
+        'WRITE ALL COPY: [produce ready-to-post versions for every channel listed]',
+      ].join('\n'),
+    },
+    {
+      id: 'r2', technique: 'AIDA Framework', recommended: false,
+      label: '🎯 AIDA Copywriter',
+      why: 'Attention→Interest→Desire→Action — the conversion framework that has worked for 100 years',
+      prompt: [
+        'You are a Performance Marketer and copywriter. Use AIDA to build this campaign:',
+        '',
+        prompt,
+        '',
+        'ATTENTION (stop the scroll / open the email / pause the page):',
+        '  Headline options (write 5):',
+        '    1. [bold claim headline]',
+        '    2. [curiosity gap headline]',
+        '    3. [specific number headline]',
+        '    4. [contrarian headline]',
+        '    5. [how-to headline]',
+        '  Winner: [#n] — explain why in one line',
+        '',
+        'INTEREST (keep them reading — connect to their world):',
+        '  Hook story: [2-3 sentences — a specific scenario they recognise]',
+        '  Key insight: [the thing they did not know that makes them want to keep reading]',
+        '  Social proof: [one specific, credible data point]',
+        '',
+        'DESIRE (make them want it):',
+        '  Benefits (not features — what changes in their life):',
+        '    → [benefit 1 — specific and measurable]',
+        '    → [benefit 2]',
+        '    → [benefit 3]',
+        '  The vision: [paint the "after" state in 2 sentences]',
+        '',
+        'ACTION (one clear next step):',
+        '  CTA: [exact button/link text]',
+        '  Urgency or reason to act now: [real, not manufactured]',
+        '  Risk reversal: [what removes the fear of acting]',
+        '',
+        'FULL COPY: [write the complete piece end-to-end using the above]',
+        '',
+        'VARIATIONS: [write 2 short social versions — one LinkedIn, one Twitter/X]',
+      ].join('\n'),
+    },
+    {
+      id: 'r3', technique: 'Voice-Tone Calibration', recommended: false,
+      label: '🗣 Brand Voice Builder',
+      why: 'Define the voice before creating content — consistency drives recognition',
+      prompt: [
+        'You are a Brand Strategist with 12 years building SaaS and consumer product brands.',
+        '',
+        'Brand/marketing task: ' + prompt,
+        '',
+        'BRAND VOICE CALIBRATION (complete before writing anything):',
+        '',
+        '  Personality in 3 adjectives: [e.g. direct, warm, unconventional]',
+        '  Tone on a spectrum:',
+        '    Formal ←——→ Conversational: [position]',
+        '    Serious ←——→ Playful: [position]',
+        '    Technical ←——→ Simple: [position]',
+        '',
+        '  WRITE LIKE: [3 reference brands or writers with this voice]',
+        '  NEVER WRITE LIKE: [3 brands or styles to avoid]',
+        '',
+        '  Vocabulary rules:',
+        '    Always use: [5 words/phrases that fit the brand]',
+        '    Never use: [5 words/phrases that feel off-brand]',
+        '',
+        'APPLY THE VOICE — create these assets:',
+        '',
+        '  1. Tagline (max 8 words): [3 options]',
+        '  2. One-liner (what this is, for whom, and why it matters):',
+        '  3. LinkedIn bio / about section (150 words):',
+        '  4. Cold outreach opening line (for DMs or emails):',
+        '  5. Product Hunt tagline (max 60 chars):',
+        '  6. Twitter / X profile bio (max 160 chars):',
+        '',
+        'VOICE CONSISTENCY CHECK:',
+        '  Read each asset aloud — does it sound like the same person?',
+        '  Flag any asset that sounds off and rewrite it.',
+      ].join('\n'),
+    },
+    ...UNIVERSAL_EXTRAS(prompt)
+  ])
+
+  // ── Startup / Investor Pitch ─────────────────────────────────────────────
+  if (domain === 'pitch') return pickThree([
+    {
+      id: 'r1', technique: 'Problem-Agitate-Solve', recommended: true,
+      label: '📊 Investor Pitch Structure',
+      why: 'VCs pattern-match against this structure — clarity on the problem is the #1 filter',
+      prompt: [
+        'You are a VC Partner who has reviewed 2,000+ pitches and invested in 40 startups.',
+        '',
+        'Pitch task: ' + prompt,
+        '',
+        'Build a complete, fundable pitch using the standard VC evaluation framework:',
+        '',
+        'SLIDE 1 — PROBLEM (30 seconds to explain)',
+        '  The problem in one sentence (no jargon):',
+        '  Who specifically suffers from this (quantified):',
+        '  How are they solving it today (and why that is painful):',
+        '  The insight that makes the problem real: [a specific story or data point]',
+        '',
+        'SLIDE 2 — SOLUTION',
+        '  What you built (one sentence):',
+        '  The key insight your solution is built on:',
+        '  Why NOW is the right time (tailwind / inflection point):',
+        '',
+        'SLIDE 3 — MARKET SIZE (TAM / SAM / SOM)',
+        '  TAM: [total addressable market — with source]',
+        '  SAM: [serviceable addressable market]',
+        '  SOM: [realistic 3-year target — explain how you get there]',
+        '',
+        'SLIDE 4 — TRACTION (the most important slide)',
+        '  Key metric: [the one number that proves people want this]',
+        '  Growth rate: [MoM or WoW]',
+        '  Retention signal: [why users come back]',
+        '  Strongest proof point: [quote, logo, number]',
+        '',
+        'SLIDE 5 — BUSINESS MODEL',
+        '  How you make money: [pricing model]',
+        '  Unit economics: [CAC, LTV, payback period]',
+        '  Path to $1M ARR: [specific, step-by-step]',
+        '',
+        'SLIDE 6 — THE ASK',
+        '  Raising: [$amount] on [SAFE / priced round] at [$valuation]',
+        '  Use of funds: [% engineering / % GTM / % ops]',
+        '  Milestones this gets us to: [specific, 18-month plan]',
+        '',
+        'HARDEST QUESTIONS A VC WILL ASK — and your answers:',
+        '  1. Why will you win vs. [biggest competitor]?',
+        '  2. What happens if [biggest risk] occurs?',
+        '  3. Why are you the right team for this?',
+      ].join('\n'),
+    },
+    {
+      id: 'r2', technique: 'Few-Shot Examples', recommended: false,
+      label: '🎯 Winning Pitch Reference',
+      why: 'Model your pitch on successful ones — VCs funded these structures',
+      prompt: [
+        'You are a Startup Advisor who has helped 50 companies raise their seed rounds.',
+        '',
+        'Pitch task: ' + prompt,
+        '',
+        '--- EXAMPLE OF A FUNDABLE 1-PARAGRAPH PITCH ---',
+        '"[Company] is a [category] for [audience] that [key benefit]. Unlike [alternative], we [differentiator]. We have [traction metric] in [time] with [key customer]. We are raising $[X] to [specific milestone]."',
+        '--- END EXAMPLE ---',
+        '',
+        'Write my pitch using that exact structure. Then expand into:',
+        '',
+        'ELEVATOR PITCH (30 seconds, spoken aloud):',
+        '  [Script — exactly what to say, natural spoken language]',
+        '',
+        'EMAIL PITCH (for cold investor outreach):',
+        '  Subject line: [make them open it]',
+        '  Body: [5 sentences max — problem, solution, traction, ask, link]',
+        '',
+        'DEMO DAY INTRO (2 minutes):',
+        '  Opening hook: [start with a story, not a definition]',
+        '  Problem: [make the pain visceral]',
+        '  Solution: [show, do not tell]',
+        '  Traction: [the number that makes investors lean in]',
+        '  The ask: [clear and specific]',
+        '',
+        'BEFORE THE MEETING — 3 things to research about this specific investor:',
+        '  1. [what to look up]',
+        '  2. [what to look up]',
+        '  3. [how to personalise the pitch for them]',
+      ].join('\n'),
+    },
+    {
+      id: 'r3', technique: 'Devil\'s Advocate', recommended: false,
+      label: '😈 VC Red Flags — Stress Test',
+      why: 'Anticipate every hard question before it is asked',
+      prompt: [
+        'You are a Pitch Coach who prepares founders for notoriously tough investor meetings.',
+        '',
+        'Pitch: ' + prompt,
+        '',
+        'Run the full VC red-flag stress test:',
+        '',
+        'THE 10 HARDEST QUESTIONS THIS PITCH WILL GET:',
+        '  For each, give: [question] → [what a weak answer sounds like] → [what a strong answer sounds like]',
+        '',
+        '  1. Market size: "How did you calculate TAM? Walk me through the math."',
+        '  2. Competition: "Why won\'t [big company] just copy this in 6 months?"',
+        '  3. Moat: "What stops someone from building this in a weekend?"',
+        '  4. Traction: "This growth looks lumpy — explain the dip in month 4."',
+        '  5. Team: "None of you have done this before. Why should we bet on you?"',
+        '  6. Economics: "Your LTV:CAC is 2:1. That\'s not good enough to scale. How do you fix it?"',
+        '  7. Churn: "What are users saying when they cancel?"',
+        '  8. Timing: "Why didn\'t this work 5 years ago, and what changed?"',
+        '  9. Valuation: "How did you arrive at this valuation? Walk me through your logic."',
+        '  10. Use of funds: "If you close half the round, what do you cut first?"',
+        '',
+        'RED FLAGS IN THIS SPECIFIC PITCH (be brutal):',
+        '  [List every weakness a sceptical investor will notice]',
+        '',
+        'HOW TO ADDRESS EACH RED FLAG:',
+        '  [For each weakness: what to say, what data to prepare, what to acknowledge honestly]',
+        '',
+        'THE ONE THING THAT WILL MAKE OR BREAK THIS PITCH:',
+        '  [The single most important thing to nail — if you lose this, you lose the meeting]',
+      ].join('\n'),
+    },
+    ...UNIVERSAL_EXTRAS(prompt)
+  ])
+
+  // ── Social Media Post ────────────────────────────────────────────────────
+  if (domain === 'social_media') return pickThree([
+    {
+      id: 'r1', technique: 'Hook-Problem-Solution-CTA', recommended: true,
+      label: '⚡ Viral Post Formula',
+      why: 'The structure behind every post that gets saved and shared',
+      prompt: [
+        'You are a LinkedIn Growth Expert with 100k+ followers who studies what makes posts viral.',
+        '',
+        'Post brief: ' + prompt,
+        '',
+        'Build this post using the viral formula:',
+        '',
+        'HOOK OPTIONS (write 5 — first line must stop the scroll):',
+        '  1. [bold contrarian claim]',
+        '  2. [specific number + surprising result]',
+        '  3. [relatable frustration everyone feels]',
+        '  4. [story opener — "I made a mistake..."]',
+        '  5. [provocative question]',
+        '  Best hook: [#n] — [one line on why]',
+        '',
+        'FULL POST DRAFT:',
+        '  [Hook line]',
+        '  [Line break]',
+        '  [2-3 lines expanding on the hook — the "so what"]',
+        '  [Line break]',
+        '  [The insight, story, or list — the actual value]',
+        '  [Line break]',
+        '  [The takeaway — one sentence]',
+        '  [Line break]',
+        '  [CTA — specific ask or question to start comments]',
+        '',
+        'PLATFORM VARIATIONS:',
+        '  LinkedIn (800-1200 chars):',
+        '  Twitter/X (280 chars max):',
+        '  Instagram caption (150 chars + hashtags):',
+        '',
+        'ENGAGEMENT PREDICTION:',
+        '  Why this will get comments: [specific reason]',
+        '  The one change that would 2x performance: [honest critique]',
+        '',
+        'HASHTAGS: [8 relevant hashtags, ranked by reach]',
+      ].join('\n'),
+    },
+    {
+      id: 'r2', technique: 'Before-After-Bridge', recommended: false,
+      label: '🌉 Before-After-Bridge Story',
+      why: 'Transformation stories are the most shared content format on every platform',
+      prompt: [
+        'You are a Personal Brand Strategist. Use the Before-After-Bridge framework:',
+        '',
+        'Post topic: ' + prompt,
+        '',
+        'BEFORE (paint the painful status quo):',
+        '  The situation: [what life looks like without the solution]',
+        '  The feeling: [the specific emotion — frustrated, embarrassed, stuck, overwhelmed]',
+        '  The cost: [what it actually costs them — time, money, opportunity]',
+        '',
+        'AFTER (paint the vision):',
+        '  The transformation: [what changed, specifically]',
+        '  The new reality: [daily life after the change]',
+        '  The proof: [the number, quote, or moment that makes it real]',
+        '',
+        'BRIDGE (how to get from Before to After):',
+        '  The key insight: [what they had to understand]',
+        '  The action: [what they did]',
+        '  The lesson: [what others can take away]',
+        '',
+        'FULL POST (end-to-end):',
+        '  [Write the complete post — hook, before, after, bridge, CTA]',
+        '',
+        'COMMENT STARTER: [ask a question that makes people share their own before/after]',
+      ].join('\n'),
+    },
+    ...UNIVERSAL_EXTRAS(prompt)
+  ])
+
+  // ── Science, health, or general — universal techniques ──────────────────
   const domainLabel = { science: 'Science', health: 'Health', general: 'Expert' }[domain] || 'Expert'
 
   return pickThree([
