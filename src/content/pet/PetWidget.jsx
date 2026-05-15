@@ -37,13 +37,13 @@ export default function PetWidget() {
 
   // ── Load saved prefs ────────────────────────────────────────────────────
   useEffect(() => {
-    chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek'], r => {
+    chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model'], r => {
       const t = r.pet_type || 'dog'
       const p = r.pet_pos  || posRef.current
       setPtype(t)
       posRef.current = p
       setPos(p)
-      setKeys({ groq: r.pet_key_groq, openai: r.pet_key_openai, deepseek: r.pet_key_deepseek })
+      setKeys({ groq: r.pet_key_groq, openai: r.pet_key_openai, deepseek: r.pet_key_deepseek, ollama_model: r.pet_ollama_model || null })
       setReady(true)
       if (!r.pet_type) setPanel(S.OPEN)   // first launch → open sidebar
     })

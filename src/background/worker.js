@@ -1,4 +1,5 @@
 const BACKEND = 'http://localhost:8000'
+const OLLAMA  = 'http://localhost:11434'
 
 // Keep service worker alive
 chrome.alarms.create('pet_alive', { periodInMinutes: 0.4 })
@@ -18,40 +19,189 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 })
 
 async function route(msg) {
-  if (msg.type === 'GET_ALL_KEYS') return getKeys()
-  if (msg.type === 'SET_KEY')      return setKey(msg.provider, msg.key)
+  if (msg.type === 'GET_ALL_KEYS')     return getKeys()
+  if (msg.type === 'SET_KEY')          return setKey(msg.provider, msg.key)
+  if (msg.type === 'OLLAMA_MODELS')    return getOllamaModels()
 
   if (msg.type === 'REWRITE') {
     const prompt = (msg.prompt || '').trim()
     if (!prompt) return { ok: true, rewrites: [] }
-    const fallback = instant(prompt)
 
-    try {
-      const keys = await getKeys()
-      const key  = msg.api_key || keys.groq || keys.openai || keys.deepseek
-      if (key) {
+    const keys = await getKeys()
+
+    // Tier 1: Ollama (local, free, private) — no key needed
+    if (keys.ollama_model) {
+      try {
+        const data = await ollamaRewrite(prompt, keys.ollama_model, msg.session_id)
+        if (data?.rewrites?.length) return { ok: true, ...data, source: 'ollama' }
+      } catch (e) { console.warn('[PET] Ollama unavailable:', e.message) }
+    }
+
+    // Tier 2: Groq/OpenAI backend
+    const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
+    if (key) {
+      try {
         const data = await post('/rewrite', { prompt, api_key: key, session_id: msg.session_id })
-        if (data?.rewrites?.length) return { ok: true, ...data }
-      }
-    } catch (e) { console.warn('[PET] backend unavailable, using local PT engine') }
+        if (data?.rewrites?.length) return { ok: true, ...data, source: 'groq' }
+      } catch (e) { console.warn('[PET] backend unavailable') }
+    }
 
-    return { ok: true, rewrites: fallback, source: 'instant' }
+    // Tier 3: offline static templates
+    return { ok: true, rewrites: instant(prompt), source: 'instant' }
   }
 
   if (msg.type === 'EVALUATE') {
     if (!msg.question || !msg.response) return { ok: false, error: 'missing fields' }
-    try {
-      const keys = await getKeys()
-      const key  = msg.api_key || keys.groq || keys.openai || keys.deepseek
-      if (key) {
+
+    const keys = await getKeys()
+
+    // Tier 1: Ollama
+    if (keys.ollama_model) {
+      try {
+        const data = await ollamaEvaluate(msg.question, msg.response, keys.ollama_model, msg.session_id)
+        if (data?.score !== undefined) return { ok: true, ...data, source: 'ollama' }
+      } catch (e) { console.warn('[PET] Ollama eval unavailable:', e.message) }
+    }
+
+    // Tier 2: Groq/OpenAI backend
+    const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
+    if (key) {
+      try {
         const data = await post('/evaluate', { question: msg.question, response: msg.response, api_key: key, session_id: msg.session_id })
         if (data?.score !== undefined) return { ok: true, ...data }
-      }
-    } catch (e) { console.warn('[PET] eval backend unavailable') }
+      } catch (e) { console.warn('[PET] eval backend unavailable') }
+    }
+
+    // Tier 3: rule-based scorer
     return ruleScore(msg.question, msg.response)
   }
 
   return { ok: false, error: 'unknown type' }
+}
+
+// ── Ollama helpers ────────────────────────────────────────────────────────
+
+async function getOllamaModels() {
+  try {
+    const r = await fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(3000) })
+    if (!r.ok) return { ok: false, models: [] }
+    const data = await r.json()
+    const models = (data.models || []).map(m => ({
+      name: m.name,
+      size: m.size ? `${(m.size / 1e9).toFixed(1)}GB` : '',
+      family: m.details?.family || '',
+    }))
+    return { ok: true, models }
+  } catch {
+    return { ok: false, models: [] }
+  }
+}
+
+// Single Ollama chat call — OpenAI-compatible endpoint
+async function ollamaChat(model, system, user, maxTokens = 2000) {
+  const r = await fetch(`${OLLAMA}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      max_tokens: maxTokens,
+      temperature: 0.75,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(45000),
+  })
+  if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+  const data = await r.json()
+  return data.choices?.[0]?.message?.content || ''
+}
+
+function safeJSON(raw) {
+  if (!raw) return null
+  const t = raw.trim()
+  try { return JSON.parse(t) } catch {}
+  const m = t.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+  if (m) { try { return JSON.parse(m[1].trim()) } catch {} }
+  const s = t.indexOf('{'), e = t.lastIndexOf('}')
+  if (s !== -1 && e > s) {
+    try { return JSON.parse(t.slice(s, e + 1)) } catch {}
+    try { return JSON.parse(t.slice(s, e + 1).replace(/,(\s*[}\]])/g, '$1')) } catch {}
+  }
+  return null
+}
+
+const OLLAMA_CLASSIFY_SYS = `You are a prompt engineering expert. Classify the user's question and choose 3 different techniques.
+
+Return ONLY valid JSON (no explanation):
+{
+  "domain": "<specific domain like 'organic chemistry', 'machine learning', 'personal finance'>",
+  "task": "<learn|debug|build|analyze|write|calculate|compare|create>",
+  "techniques": [
+    {"name": "<Technique1>", "label": "<emoji + short name>", "why": "<one sentence why for THIS question>", "persona": "<expert role>"},
+    {"name": "<Technique2>", "label": "<emoji + short name>", "why": "<one sentence why for THIS question>", "persona": "<expert role>"},
+    {"name": "<Technique3>", "label": "<emoji + short name>", "why": "<one sentence why for THIS question>", "persona": "<expert role>"}
+  ]
+}
+
+Pick 3 DIFFERENT techniques from: Chain-of-Thought, Socratic Method, Feynman Technique, Few-Shot Examples, Tree of Thought, Devil's Advocate, Expert Panel, Comparative Analysis, First Principles, Role Reversal`
+
+const OLLAMA_REWRITE_SYS = `You are a master prompt engineer. Generate 3 DIFFERENT expert prompts for the user's question.
+
+RULES:
+- Each prompt uses a DIFFERENT technique (assigned in the request)
+- Each prompt is tailored to THIS specific question — not a generic template
+- NEVER apply software/tech templates (MVP, architecture, tech stack) to non-tech questions
+- Each prompt: 150-250 words, starts with expert role, uses clear structured sections
+- Make each prompt meaningfully different in structure, angle, and depth
+
+Return ONLY valid JSON:
+{"goal":"<what user wants>","rewrites":[{"id":"r1","technique":"<name>","label":"<emoji label>","why":"<why this technique>","prompt":"<full prompt>","recommended":true},{"id":"r2","technique":"<name>","label":"<emoji label>","why":"<why>","prompt":"<full prompt>","recommended":false},{"id":"r3","technique":"<name>","label":"<emoji label>","why":"<why>","prompt":"<full prompt>","recommended":false}]}`
+
+const OLLAMA_EVAL_SYS = `Evaluate this LLM response quality. Return ONLY valid JSON:
+{"score":<0-100>,"grade":"<A|B|C|D|F>","covered":["<what was addressed well>"],"missing":["<specific gaps>"],"next_prompt":"<complete follow-up prompt the user can send — 80-150 words, specific to this response>"}`
+
+async function ollamaRewrite(prompt, model, sessionId) {
+  // Step 1: classify intent (fast — small response)
+  const classifyRaw = await ollamaChat(model, OLLAMA_CLASSIFY_SYS,
+    `Classify this question: "${prompt}"`, 400)
+  const intent = safeJSON(classifyRaw)
+
+  // Step 2: generate 3 different prompts
+  const techniqueStr = (intent?.techniques || []).slice(0, 3).map((t, i) =>
+    `Technique ${i+1}: ${t.name} | Label: ${t.label} | Persona: ${t.persona} | Why: ${t.why}`
+  ).join('\n')
+
+  const userMsg = `User question: "${prompt}"\nDomain: ${intent?.domain || 'general'}\nTask: ${intent?.task || 'explore'}\n\nUse these 3 different techniques (one per prompt):\n${techniqueStr || 'Chain-of-Thought, Socratic Method, First Principles'}\n\nGenerate 3 completely different prompts.`
+
+  const rewriteRaw = await ollamaChat(model, OLLAMA_REWRITE_SYS, userMsg, 2000)
+  const data = safeJSON(rewriteRaw)
+  if (!data?.rewrites?.length) return null
+
+  // Merge technique labels from intent
+  const techniques = intent?.techniques || []
+  data.rewrites.forEach((r, i) => {
+    if (techniques[i]) {
+      r.label     = r.label     || techniques[i].label
+      r.technique = r.technique || techniques[i].name
+      r.why       = r.why       || techniques[i].why
+    }
+  })
+  return data
+}
+
+async function ollamaEvaluate(question, response, model, sessionId) {
+  const userMsg = `User goal: "${question}"\n\nLLM response:\n"""\n${response.slice(0, 1500)}\n"""\n\nEvaluate quality and write a follow-up prompt.`
+  const raw = await ollamaChat(model, OLLAMA_EVAL_SYS, userMsg, 600)
+  const data = safeJSON(raw)
+  if (!data?.score) return null
+  data.setdefault = undefined  // ensure clean object
+  data.score    = data.score    ?? 50
+  data.grade    = data.grade    ?? 'C'
+  data.covered  = data.covered  ?? []
+  data.missing  = data.missing  ?? []
+  const gradeMap = { A: 'Excellent ✦', B: 'Good ✓', C: 'Partial ~', D: 'Weak ✗', F: 'Off-target ✗' }
+  data.grade_label = gradeMap[data.grade] || '~'
+  return data
 }
 
 async function post(path, body) {
@@ -962,11 +1112,17 @@ function ruleScore(question, response) {
 
 function getKeys() {
   return new Promise(res =>
-    chrome.storage.local.get(['pet_key_groq','pet_key_openai','pet_key_deepseek'], r =>
-      res({ groq: r.pet_key_groq||null, openai: r.pet_key_openai||null, deepseek: r.pet_key_deepseek||null })
+    chrome.storage.local.get(['pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model'], r =>
+      res({
+        groq:         r.pet_key_groq         || null,
+        openai:       r.pet_key_openai        || null,
+        deepseek:     r.pet_key_deepseek      || null,
+        ollama_model: r.pet_ollama_model      || null,
+      })
     )
   )
 }
 function setKey(p, k) {
-  return new Promise(res => chrome.storage.local.set({ ['pet_key_' + p]: k }, () => res({ ok: true })))
+  const storageKey = p === 'ollama_model' ? 'pet_ollama_model' : `pet_key_${p}`
+  return new Promise(res => chrome.storage.local.set({ [storageKey]: k }, () => res({ ok: true })))
 }

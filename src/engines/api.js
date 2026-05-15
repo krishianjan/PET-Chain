@@ -37,7 +37,12 @@ export const rewrite  = (prompt, key) =>
 
 export const evaluate = (response, key) => {
   if (!response?.trim()) return Promise.resolve(null)
-  // Use stored question if available, otherwise use first 150 chars of response as context
   const question = _q || response.slice(0, 150)
   return send('EVALUATE', { question, response: response.slice(0, 2000), api_key: key, session_id: SID })
 }
+
+export const getOllamaModels = () =>
+  send('OLLAMA_MODELS', {}, 5000)
+
+export const setKey = (provider, key) =>
+  send('SET_KEY', { provider, key })

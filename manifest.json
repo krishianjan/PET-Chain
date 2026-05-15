@@ -22,7 +22,10 @@
     "https://claude.ai/*",
     "https://gemini.google.com/*",
     "https://x.com/*",
-    "https://chat.deepseek.com/*"
+    "https://chat.deepseek.com/*",
+    "https://deepseek.com/*",
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*"
   ],
   "background": {
     "service_worker": "src/background/worker.js",
@@ -36,7 +39,10 @@
         "https://claude.ai/*",
         "https://gemini.google.com/*",
         "https://x.com/*",
-        "https://chat.deepseek.com/*"
+        "https://chat.deepseek.com/*",
+        "https://deepseek.com/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*"
       ],
       "js": [
         "src/content/index.jsx"

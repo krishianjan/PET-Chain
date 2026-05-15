@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { setQ, getQ, rewrite, evaluate } from '../../engines/api'
+import { setQ, getQ, rewrite, evaluate, getOllamaModels, setKey as apiSetKey } from '../../engines/api'
 import lottie from 'lottie-web'
 import { recordRewrite, recordScore, recordInject } from '../../engines/metrics_store'
 import selectorsConfig from '../../../selectors.config.json'
@@ -26,6 +26,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const originalQ = useRef('')
 
   const apiKey = keys.groq || keys.openai || keys.deepseek
+  const hasEngine = !!(keys.ollama_model || apiKey)
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -350,27 +351,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
 
       {/* Body */}
       {view === 'setup' ? (
-        <div style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, color: '#166534', background: '#f0fdf4', padding: 10, borderRadius: 8, marginBottom: 10 }}>
-            Free Groq API key at <b>console.groq.com</b>
-          </div>
-          <input
-            type="password"
-            placeholder="Paste Groq Key (gsk_…) then press Enter"
-            style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 6, fontSize: 11, boxSizing: 'border-box' }}
-            onKeyDown={async e => {
-              if (e.key === 'Enter' && e.target.value.trim()) {
-                await chrome.runtime.sendMessage({ type: 'SET_KEY', provider: 'groq', key: e.target.value.trim() })
-                setKeys(k => ({ ...k, groq: e.target.value.trim() }))
-                setView('main')
-                setStatus('API key saved!')
-              }
-            }}
-          />
-          <button onClick={() => setView('main')} style={{ marginTop: 8, width: '100%', padding: 6, background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
-            Use local mode (no key needed)
-          </button>
-        </div>
+        <SetupView keys={keys} setKeys={setKeys} setView={setView} setStatus={setStatus} />
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
 
@@ -392,10 +373,15 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
             </button>
           </div>
 
-          {/* No key notice */}
-          {!apiKey && (
+          {/* No engine notice */}
+          {!hasEngine && (
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 8, fontSize: 10, color: '#92400e' }}>
-              ⚠ No API key — using offline mode (3 local prompts). <span onClick={() => setView('setup')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>Add Groq key</span> for AI-powered prompts.
+              ⚡ Using offline templates. <span onClick={() => setView('setup')} style={{ textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}>Connect Ollama or Groq</span> for AI-powered prompts.
+            </div>
+          )}
+          {keys.ollama_model && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '5px 8px', fontSize: 10, color: '#166534' }}>
+              🦙 Ollama: <b>{keys.ollama_model}</b> · <span onClick={() => setView('setup')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>change</span>
             </div>
           )}
 
@@ -529,6 +515,175 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
         onMouseDown={e => { resizing.current = true; rstart.current = { x: e.clientX, y: e.clientY, w: sizeRef.current.w, h: sizeRef.current.h }; e.preventDefault() }}
         style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, cursor: 'se-resize', opacity: 0.4 }}
       >▗</div>
+    </div>
+  )
+}
+
+// ── Setup view — Ollama + Groq configuration ──────────────────────────────
+function SetupView({ keys, setKeys, setView, setStatus }) {
+  const [ollamaModels,  setOllamaModels]  = useState(null)   // null = not checked yet
+  const [ollamaStatus,  setOllamaStatus]  = useState('')
+  const [detecting,     setDetecting]     = useState(false)
+  const [groqInput,     setGroqInput]     = useState('')
+  const [saved,         setSaved]         = useState('')
+
+  const activeOllama = keys.ollama_model
+  const activeGroq   = keys.groq
+
+  async function detectOllama() {
+    setDetecting(true)
+    setOllamaStatus('Checking localhost:11434…')
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'OLLAMA_MODELS' })
+      if (res?.ok && res.models?.length) {
+        setOllamaModels(res.models)
+        setOllamaStatus(`✓ Found ${res.models.length} model${res.models.length > 1 ? 's' : ''}`)
+      } else {
+        setOllamaModels([])
+        setOllamaStatus('Ollama not running — start it with: ollama serve')
+      }
+    } catch {
+      setOllamaModels([])
+      setOllamaStatus('Could not reach Ollama')
+    }
+    setDetecting(false)
+  }
+
+  async function selectOllamaModel(model) {
+    await chrome.runtime.sendMessage({ type: 'SET_KEY', provider: 'ollama_model', key: model })
+    setKeys(k => ({ ...k, ollama_model: model }))
+    setSaved('ollama')
+    setStatus(`✓ Ollama: ${model}`)
+    setTimeout(() => setSaved(''), 2000)
+  }
+
+  async function clearOllama() {
+    await chrome.runtime.sendMessage({ type: 'SET_KEY', provider: 'ollama_model', key: '' })
+    setKeys(k => ({ ...k, ollama_model: null }))
+    setStatus('Ollama removed')
+  }
+
+  async function saveGroqKey(key) {
+    await chrome.runtime.sendMessage({ type: 'SET_KEY', provider: 'groq', key })
+    setKeys(k => ({ ...k, groq: key }))
+    setSaved('groq')
+    setStatus('✓ Groq key saved!')
+    setTimeout(() => setSaved(''), 2000)
+  }
+
+  const cardStyle = (active) => ({
+    border: `1.5px solid ${active ? '#c4b5fd' : '#e5e7eb'}`,
+    borderRadius: 10, padding: 12, marginBottom: 10,
+    background: active ? '#f5f3ff' : '#fff',
+  })
+
+  return (
+    <div style={{ padding: 14, overflowY: 'auto', flex: 1 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#534ab7', marginBottom: 12 }}>
+        AI Engine Setup
+      </div>
+
+      {/* Priority indicator */}
+      <div style={{ fontSize: 10, color: '#6b7280', background: '#f9fafb', borderRadius: 8, padding: '6px 10px', marginBottom: 12, lineHeight: 1.7 }}>
+        <b>Priority order:</b><br />
+        {activeOllama ? '🟢' : '⚪'} 1. Ollama (local, free, private)<br />
+        {activeGroq   ? '🟢' : '⚪'} 2. Groq cloud (fast, free tier)<br />
+        ⚪ 3. Offline templates (always available)
+      </div>
+
+      {/* ── Ollama section ── */}
+      <div style={cardStyle(!!activeOllama)}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>
+            🦙 Ollama <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 400 }}>local · no key needed</span>
+          </div>
+          {activeOllama && (
+            <button onClick={clearOllama} style={{ fontSize: 9, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>remove</button>
+          )}
+        </div>
+
+        {activeOllama ? (
+          <div style={{ fontSize: 10, color: '#166534', background: '#f0fdf4', padding: '5px 8px', borderRadius: 6 }}>
+            ✓ Active: <b>{activeOllama}</b>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 8 }}>
+              Run any model locally — llama3, mistral, qwen2.5, gemma2. 100% private.
+            </div>
+            <button
+              onClick={detectOllama}
+              disabled={detecting}
+              style={{ width: '100%', padding: '7px 0', background: detecting ? '#e5e7eb' : '#f0f0ff', color: '#534ab7', border: '1px solid #c4b5fd', borderRadius: 7, cursor: detecting ? 'wait' : 'pointer', fontSize: 11, fontWeight: 600 }}
+            >
+              {detecting ? 'Detecting…' : '⟳ Detect Ollama Models'}
+            </button>
+            {ollamaStatus && (
+              <div style={{ fontSize: 10, color: ollamaModels?.length ? '#166534' : '#dc2626', marginTop: 6 }}>{ollamaStatus}</div>
+            )}
+            {ollamaModels?.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {ollamaModels.map(m => (
+                  <button
+                    key={m.name}
+                    onClick={() => selectOllamaModel(m.name)}
+                    style={{
+                      padding: '6px 10px', background: '#fff', border: '1px solid #e5e7eb',
+                      borderRadius: 6, cursor: 'pointer', fontSize: 10, textAlign: 'left',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#374151' }}>{m.name}</span>
+                    <span style={{ color: '#9ca3af' }}>{m.size}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {ollamaModels?.length === 0 && ollamaStatus && (
+              <div style={{ marginTop: 8, fontSize: 10, color: '#6b7280', background: '#f9fafb', padding: 8, borderRadius: 6 }}>
+                Install: <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>brew install ollama</code><br />
+                Pull model: <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>ollama pull llama3.2</code><br />
+                Start: <code style={{ background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>ollama serve</code>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Groq section ── */}
+      <div style={cardStyle(!!activeGroq)}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
+          ⚡ Groq <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 400 }}>cloud · free tier · llama-3.3-70b</span>
+        </div>
+        {activeGroq ? (
+          <div style={{ fontSize: 10, color: '#166534', background: '#f0fdf4', padding: '5px 8px', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>✓ Key saved (gsk_…{activeGroq.slice(-4)})</span>
+            <button onClick={async () => { await chrome.runtime.sendMessage({ type:'SET_KEY', provider:'groq', key:'' }); setKeys(k=>({...k,groq:null})) }} style={{ fontSize: 9, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>remove</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 6 }}>
+              Free at <b>console.groq.com</b> — uses llama-3.3-70b, fastest cloud option.
+            </div>
+            <input
+              type="password"
+              placeholder="Paste Groq key (gsk_…) then Enter"
+              value={groqInput}
+              onChange={e => setGroqInput(e.target.value)}
+              style={{ width: '100%', padding: 7, border: '1px solid #ddd', borderRadius: 6, fontSize: 11, boxSizing: 'border-box' }}
+              onKeyDown={e => { if (e.key === 'Enter' && groqInput.trim()) { saveGroqKey(groqInput.trim()); setGroqInput('') } }}
+            />
+            {saved === 'groq' && <div style={{ fontSize: 10, color: '#166534', marginTop: 4 }}>✓ Saved!</div>}
+          </>
+        )}
+      </div>
+
+      <button
+        onClick={() => setView('main')}
+        style={{ width: '100%', padding: 7, background: '#f3f4f6', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 11, color: '#6b7280' }}
+      >
+        ← Back (offline mode works without any setup)
+      </button>
     </div>
   )
 }
