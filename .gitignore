@@ -3,3 +3,7 @@ node_modules/
 *.local
 .env
 *.log
+node_modules/
+backend/__pycache__/
+*.pyc
+.claude/
