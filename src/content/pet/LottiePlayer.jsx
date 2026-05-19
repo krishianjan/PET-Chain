@@ -134,7 +134,7 @@ export default function LottiePlayer({ controllerRef, petType }) {
         />
       )}
 
-      {/* Emoji fallback — shows immediately for non-sprite pets until Lottie loads */}
+      {/* Emoji fallback — shows immediately until Lottie loads; stays if Lottie fails */}
       {showEmoji && (
         <div
           className="pet-emoji"
@@ -147,8 +147,8 @@ export default function LottiePlayer({ controllerRef, petType }) {
             fontSize:       44,
             lineHeight:     1,
             pointerEvents:  'none',
-            // Fade out smoothly when Lottie takes over
-            opacity:        lottieState === 'pending' ? 1 : 0,
+            // Always visible when mounted — showEmoji is only true for 'pending' and 'failed'
+            opacity:        1,
             transition:     'opacity 0.3s ease',
           }}
         >

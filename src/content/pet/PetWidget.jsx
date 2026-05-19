@@ -217,32 +217,23 @@ export default function PetWidget() {
           pointerEvents: 'auto',
           userSelect: 'none',
         }}>
-          {PETS.map(p => {
-            const comingSoon = p.id === 'rabbit' || p.id === 'human'
-            return (
-              <div
-                key={p.id}
-                onClick={() => !comingSoon && selectPet(p.id)}
-                title={comingSoon ? '✨ Coming Soon — sprite animation in progress' : p.label}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  padding: '4px 8px', borderRadius: 8,
-                  cursor: comingSoon ? 'not-allowed' : 'pointer',
-                  background: ptype === p.id ? '#f0f0ff' : 'transparent',
-                  border: ptype === p.id ? '1.5px solid #c4b5fd' : '1.5px solid transparent',
-                  opacity: comingSoon ? 0.55 : 1,
-                  position: 'relative',
-                }}
-              >
-                <span style={{ fontSize: 22, filter: comingSoon ? 'grayscale(0.6)' : 'none' }}>{p.emoji}</span>
-                {comingSoon ? (
-                  <span style={{ fontSize: 7, color: '#7c3aed', fontFamily: 'system-ui', fontWeight: 700, background: '#f5f3ff', borderRadius: 3, padding: '1px 3px', border: '1px solid #ddd6fe' }}>Soon ✨</span>
-                ) : (
-                  <span style={{ fontSize: 8, color: '#6b7280', fontFamily: 'system-ui' }}>{p.label}</span>
-                )}
-              </div>
-            )
-          })}
+          {PETS.map(p => (
+            <div
+              key={p.id}
+              onClick={() => selectPet(p.id)}
+              title={p.label}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                padding: '4px 8px', borderRadius: 8,
+                cursor: 'pointer',
+                background: ptype === p.id ? '#f0f0ff' : 'transparent',
+                border: ptype === p.id ? '1.5px solid #c4b5fd' : '1.5px solid transparent',
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{p.emoji}</span>
+              <span style={{ fontSize: 8, color: '#6b7280', fontFamily: 'system-ui' }}>{p.label}</span>
+            </div>
+          ))}
         </div>
       )}
 

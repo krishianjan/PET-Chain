@@ -119,51 +119,47 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     return 'general'
   }
 
-  // ── Domain-aware follow-up prompt builder ─────────────────────────────────
-  function buildFollowUp(domain, gaps, score) {
-    const g0 = gaps[0] || ''
-    const gapPhrase = gaps.slice(0, 2).map(w => `"${w}"`).join(' and ')
+  // ── Dynamic follow-up builder — uses actual gaps + question, not templates ──
+  function buildFollowUp(domain, gaps, score, originalQ = '') {
+    const g = gaps.filter(Boolean).slice(0, 3)
+    const hasGaps = g.length > 0
+    const qSnippet = originalQ ? originalQ.slice(0, 100) : ''
 
-    if (score >= 78) {
-      const deepeners = {
-        finance:    `The explanation covered the basics well. Push it further: "Walk me through a complete real decision using what you just explained. Pick one specific asset available in today's market, apply each concept with actual current prices, show the full calculation, and give a concrete buy/hold/sell recommendation with a specific dollar amount and timeline. Flag the biggest risk to this position."`,
-        code_debug: `The fix looks solid. Now harden it: "You identified the root cause — next: (1) write a unit test that would have caught this bug before production, (2) give me a grep pattern to find similar patterns elsewhere in the codebase, and (3) add the minimal type annotation or assertion that prevents this entire class of error at the function boundary."`,
-        code_build: `Architecture is clear. Now ship it: "Generate the complete, working code for the single most critical file you described. Include real error handling, one passing test, and the exact terminal commands to run it from a blank directory. No placeholders."`,
-        math:       `Solution verified — now build intuition: "Give me three variations of this exact problem where one variable changes each time. Show how the answer shifts and explain WHY the relationship behaves that way. Then give me a harder problem of the same type without solving it yet."`,
-        science:    `Good explanation. Now make it concrete: "Describe a specific real experiment or observation that directly proves the mechanism you explained. Walk through it step by step — what is measured, what is observed, why it confirms the theory, and what result would falsify it."`,
-        health:     `Solid overview. Now personalise it: "Walk me through how this applies to someone who is 30 years old, moderately active, with no pre-existing conditions. Give specific numbers — target ranges, optimal timings, measurable outcomes — not general advice."`,
-        learn:      `Good explanation. Now test my understanding: "Ask me three progressively harder questions — easy, medium, hard — about what you explained. After each answer from me, tell me exactly what a correct answer looks like and what misconception my answer reveals. Don't give me the answers yet."`,
-        writing:    `Strong draft. Now sharpen it: "Apply three specific edits to what you wrote: (1) rewrite the opening sentence so it creates immediate tension or curiosity, (2) replace the three most generic adjectives with precise, specific ones, (3) cut every sentence over 25 words in half. Show before and after for each change."`,
-        general:    `Good answer. Now push the edge: "Give me a specific real-world scenario where this analysis breaks down or produces the opposite result. Use actual names and numbers. Then tell me what an expert who has seen that failure would do differently."`,
+    // Format gap list naturally
+    const gapList = g.length === 0 ? ''
+      : g.length === 1 ? `"${g[0]}"`
+      : g.length === 2 ? `"${g[0]}" and "${g[1]}"`
+      : `"${g[0]}", "${g[1]}", and "${g[2]}"`
+
+    if (score >= 82) {
+      // Strong response — push for depth and real specifics
+      if (hasGaps) {
+        return `The main points are covered. Now go deeper: "You mentioned ${gapList} but didn't fully explore ${g.length > 1 ? 'them' : 'it'}. For each: give a concrete real-world example with specific numbers or working code, show the edge case where it fails or behaves unexpectedly, and explain how an expert handles that edge case differently from a beginner."`
       }
-      return deepeners[domain] || deepeners.general
+      return `Good answer. Make it concrete: "Take what you just explained and apply it to a real scenario with actual names, numbers, and measurable outcomes. Show the single thing that separates an expert's approach from a technically correct but average answer."`
     }
 
-    if (gaps.length) {
-      const fillers = {
-        finance:    `The response left gaps on ${gapPhrase}. Follow up precisely: "Your answer was incomplete on ${g0}. Please add: (1) the exact formula with every variable labelled, (2) a worked example using real 2024 data — actual tickers and prices — and (3) the most common situation where this metric gives a false signal and why."`,
-        code_debug: `Missing detail on ${gapPhrase}. Dig deeper: "The diagnosis skipped ${g0}. Show me the exact execution path that triggers the failure — trace it line by line through the call stack. Then confirm the fix by showing the specific input that previously caused the crash and the output after your change."`,
-        code_build: `Implementation skipped ${gapPhrase}. Fill the gap: "The design is missing ${g0}. Write the complete code for that part — full function signature, real error handling, edge cases handled, and one working test. No placeholders."`,
-        math:       `The solution skipped steps around ${gapPhrase}. Request: "The working jumped over the ${g0} step. Show that part in full — write every algebraic manipulation as a numbered line and explain the rule applied at each transformation."`,
-        science:    `Incomplete on ${gapPhrase}. Ask: "You skipped ${g0}. Explain it precisely: what is the mechanism, what evidence supports it, and what experiment would falsify it?"`,
-        health:     `Didn't address ${gapPhrase}. Ask: "You left out ${g0}. Give me specific, evidence-based guidance: recommended ranges, how to measure it, and what deviation from normal looks like in practice."`,
-        learn:      `Didn't explain ${gapPhrase} adequately. Request: "You mentioned ${g0} but didn't explain it. Give me: (1) a plain-English definition with a real-world analogy, (2) a concrete example with specific names or numbers, and (3) how it connects to what you explained just before it."`,
-        writing:    `Response missed ${gapPhrase}. Improve it: "The piece is missing ${g0}. Rewrite the section where it should appear and show me before and after side by side so I can see exactly what changed and why it is stronger."`,
-        general:    `The response didn't fully cover ${gapPhrase}. Follow up: "You skipped ${g0} entirely. Please explain it with: a clear one-sentence definition, a concrete real example using specific numbers or names, and the single most common mistake people make when dealing with it."`,
-      }
-      return fillers[domain] || fillers.general
+    if (score >= 60 && hasGaps) {
+      // Medium quality with specific gaps — request targeted fill
+      const intro = qSnippet
+        ? `Your response to "${qSnippet}${qSnippet.length >= 100 ? '…' : ''}" skipped`
+        : 'Your response skipped'
+      return `The answer left gaps. Follow up: "${intro} ${gapList}. For ${g.length > 1 ? 'each one' : 'it'}: what exactly is it?, how does it apply in this specific context?, and give a concrete example with real details — actual numbers, working code, or a named real-world case. Don't give a general overview."`
     }
 
-    const generic = {
-      finance:    `Go further: "Apply what you explained to a real portfolio. Use $50,000, select 4 specific ETFs or stocks trading today, show exact allocation percentages and projected returns over 3 and 5 years, and identify the single biggest risk to this portfolio right now."`,
-      code_debug: `Go further: "Show the fully fixed version of the code with all your changes applied, add a test that passes only when the bug is truly fixed, and name one related bug that frequently appears alongside this type of error."`,
-      code_build: `Go further: "Build the first working feature — complete code, zero placeholders. Include the commands to run it from scratch and the exact output that proves it works end-to-end."`,
-      math:       `Go further: "Give me a harder version of this problem where the answer is not immediately obvious, work through it fully, then explain what makes this problem type conceptually tricky for most students."`,
-      learn:      `Go further: "Teach me the next level up — assume I completely understood your explanation. What is the adjacent concept I need to learn next, and how does it connect to what you just taught?"`,
-      writing:    `Go further: "Identify the weakest paragraph in your draft. Rewrite it so the first sentence hooks the reader, every claim is backed by a specific detail, and the paragraph ends with a memorable line."`,
-      general:    `Go further: "Give me a specific, concrete example that makes this immediately practical — use real names, real numbers, and a scenario I might actually face in the next 30 days."`,
+    if (score >= 60) {
+      // Medium quality, no clear gaps — ask for specifics
+      return `The answer needs more depth. Ask: "Can you be more concrete? Pick the most important concept from your answer and show it in action — use a real example with specific numbers or code, walk through the mechanism step by step, and show what would go wrong if someone applied this incorrectly."`
     }
-    return generic[domain] || generic.general
+
+    if (hasGaps) {
+      // Low score with known gaps — request focused redo
+      const context = qSnippet ? ` in the context of "${qSnippet}${qSnippet.length >= 100 ? '…' : ''}"` : ''
+      return `The response was incomplete. Ask: "Your answer missed ${gapList}${context}. Please address the question again — specifically: define ${g[0]} precisely, show how it applies with a concrete example using real numbers or working code, and explain the step-by-step mechanism. Avoid general statements."`
+    }
+
+    // Low score, no clear keywords missed — ask for a complete redo
+    return `The response was too vague. Ask: "Please answer again with more precision. Instead of general statements, give me: (1) a specific real-world example with actual numbers or working code, (2) the step-by-step mechanism showing how it works, and (3) the one thing that would make your answer immediately actionable for someone starting right now."`
   }
 
   // ── Smart local scorer ────────────────────────────────────────────────────
@@ -219,7 +215,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     if (covered.length === 0) covered.push('Response was provided')
     const missing = missWords.map(w => `"${w}" needs more depth`)
 
-    const next_prompt = buildFollowUp(domain, missWords, sc)
+    const next_prompt = buildFollowUp(domain, missWords, sc, originalQuestion)
 
     return { score: sc, grade, grade_label, covered, missing, next_prompt }
   }
@@ -479,16 +475,16 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
             </button>
           </div>
 
-          {/* RAG context + technique intelligence banner */}
-          {rewriteMeta && rewrites.length > 0 && (
-            <div style={{ background: rewriteMeta.contextUsed ? '#eff6ff' : '#f5f3ff', border: `1px solid ${rewriteMeta.contextUsed ? '#bfdbfe' : '#ddd6fe'}`, borderRadius: 8, padding: '6px 10px', fontSize: 10, color: rewriteMeta.contextUsed ? '#1d4ed8' : '#534ab7', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>{rewriteMeta.contextUsed ? '🧠' : '✦'}</span>
+          {/* Context / source banner — only shown when there's something meaningful to surface */}
+          {rewriteMeta && rewrites.length > 0 && (rewriteMeta.contextUsed || rewriteMeta.domain) && (
+            <div style={{ background: rewriteMeta.contextUsed ? '#eff6ff' : '#f9fafb', border: `1px solid ${rewriteMeta.contextUsed ? '#bfdbfe' : '#e5e7eb'}`, borderRadius: 8, padding: '5px 10px', fontSize: 10, color: rewriteMeta.contextUsed ? '#1d4ed8' : '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {rewriteMeta.contextUsed && <span>🧠</span>}
               <div style={{ lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 700 }}>{rewriteMeta.contextUsed ? 'Session context injected' : 'Dynamic technique selection'}</span>
-                {rewriteMeta.domain && <span style={{ opacity: 0.75 }}> · {rewriteMeta.domain}</span>}
-                {rewriteMeta.outputType && <span style={{ opacity: 0.6 }}> · {rewriteMeta.outputType}</span>}
+                {rewriteMeta.contextUsed && <span style={{ fontWeight: 700 }}>Prior session context used · </span>}
+                {rewriteMeta.domain && <span>{rewriteMeta.domain}</span>}
+                {rewriteMeta.outputType && <span style={{ opacity: 0.7 }}> · {rewriteMeta.outputType}</span>}
                 {rewriteMeta.source === 'ollama' && <span style={{ color: '#166534', marginLeft: 4 }}>· 🦙 Ollama</span>}
-                {rewriteMeta.source === 'groq'   && <span style={{ color: '#0891b2', marginLeft: 4 }}>· ⚡ Cloud</span>}
+                {rewriteMeta.source === 'groq'   && <span style={{ color: '#0891b2', marginLeft: 4 }}>· ⚡ Cloud AI</span>}
               </div>
             </div>
           )}
