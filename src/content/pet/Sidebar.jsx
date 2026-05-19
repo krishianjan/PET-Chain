@@ -17,6 +17,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const [editTexts,   setEditTexts] = useState({})
   const [editingName, setEditingName] = useState(false)
   const [nameDraft,   setNameDraft]   = useState('')
+  const [rewriteMeta, setRewriteMeta] = useState(null)
 
   const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
   const sizeRef   = useRef({ w: 340, h: 520 })
@@ -244,7 +245,15 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
       return
     }
     setRewrites(result.rewrites)
-    setStatus(result.source === 'instant' ? `✓ ${result.rewrites.length} local prompts ready` : `✓ ${result.rewrites.length} AI prompts ready`)
+    const src = result.source === 'ollama' ? 'Ollama' : result.source === 'groq' ? 'Cloud AI' : 'Dynamic AI'
+    const ctxNote = result.contextUsed ? ' · 🧠 context' : ''
+    setStatus(`✓ ${result.rewrites.length} prompts · ${src}${ctxNote}`)
+    setRewriteMeta({
+      domain:      result.rewrites[0]?.domain     || null,
+      outputType:  result.rewrites[0]?.outputType || null,
+      contextUsed: result.contextUsed || false,
+      source:      result.source || 'instant',
+    })
     petCtrl?.setState('happy')
     setLoading(false)
     try {
@@ -470,6 +479,20 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
             </button>
           </div>
 
+          {/* RAG context + technique intelligence banner */}
+          {rewriteMeta && rewrites.length > 0 && (
+            <div style={{ background: rewriteMeta.contextUsed ? '#eff6ff' : '#f5f3ff', border: `1px solid ${rewriteMeta.contextUsed ? '#bfdbfe' : '#ddd6fe'}`, borderRadius: 8, padding: '6px 10px', fontSize: 10, color: rewriteMeta.contextUsed ? '#1d4ed8' : '#534ab7', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>{rewriteMeta.contextUsed ? '🧠' : '✦'}</span>
+              <div style={{ lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 700 }}>{rewriteMeta.contextUsed ? 'Session context injected' : 'Dynamic technique selection'}</span>
+                {rewriteMeta.domain && <span style={{ opacity: 0.75 }}> · {rewriteMeta.domain}</span>}
+                {rewriteMeta.outputType && <span style={{ opacity: 0.6 }}> · {rewriteMeta.outputType}</span>}
+                {rewriteMeta.source === 'ollama' && <span style={{ color: '#166534', marginLeft: 4 }}>· 🦙 Ollama</span>}
+                {rewriteMeta.source === 'groq'   && <span style={{ color: '#0891b2', marginLeft: 4 }}>· ⚡ Cloud</span>}
+              </div>
+            </div>
+          )}
+
           {/* No engine notice */}
           {!hasEngine && (
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 8, fontSize: 10, color: '#92400e' }}>
@@ -494,6 +517,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#534ab7' }}>{r.label}</span>
                     {r.recommended && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0f0ff', color: '#534ab7', borderRadius: 99, padding: '1px 5px', border: '1px solid #c4b5fd' }}>Recommended</span>}
                     {r.technique && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0fdf4', color: '#166534', borderRadius: 99, padding: '1px 5px', border: '1px solid #bbf7d0' }}>{r.technique}</span>}
+                    {r.hasContext && <span style={{ marginLeft: 5, fontSize: 9, background: '#eff6ff', color: '#1d4ed8', borderRadius: 99, padding: '1px 5px', border: '1px solid #bfdbfe' }}>🧠 ctx</span>}
                   </div>
                   <span style={{ fontSize: 9, color: '#9ca3af' }}>#{idx + 1}</span>
                 </div>

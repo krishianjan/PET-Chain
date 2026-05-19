@@ -4,6 +4,332 @@ const OLLAMA       = 'http://localhost:11434'
 // const TRACK_URL = 'https://your-app.railway.app'
 const TRACK_URL    = BACKEND
 
+// ── RAG Session Store (in-memory, per service-worker lifecycle) ───────────
+// Stores recent prompt+response turns to provide context for dynamic rewrites.
+const RAG_STORE = {
+  turns: [],          // [{ prompt, response, domain, score, ts }]
+  MAX: 10,
+  STOP: new Set(['what','that','this','with','from','have','will','when','where',
+    'which','your','their','some','also','into','more','very','just','like','than',
+    'then','them','they','been','were','does','make','find','tell','give','show',
+    'need','help','about','please','could','would','should','explain','describe']),
+
+  add(prompt, response = '', domain = 'general', score = null) {
+    if (!prompt?.trim()) return
+    this.turns.push({ prompt: prompt.slice(0, 400), response: response.slice(0, 800),
+      domain, score, ts: Date.now() })
+    if (this.turns.length > this.MAX) this.turns = this.turns.slice(-this.MAX)
+  },
+
+  keywords(text) {
+    return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/).filter(w => w.length > 3 && !this.STOP.has(w))
+  },
+
+  similarity(a, b) {
+    const sa = new Set(this.keywords(a))
+    const sb = new Set(this.keywords(b))
+    const inter = [...sa].filter(w => sb.has(w)).length
+    return inter / Math.max(sa.size + sb.size - inter, 1)
+  },
+
+  retrieve(query, topK = 2) {
+    if (!this.turns.length) return []
+    return this.turns
+      .map(t => ({ ...t, sim: this.similarity(query, t.prompt + ' ' + t.response) }))
+      .filter(t => t.sim > 0.08)
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, topK)
+  },
+
+  buildContextBlock(query) {
+    const hits = this.retrieve(query)
+    if (!hits.length) return null
+    return hits.map((t, i) =>
+      `[Session context ${i + 1} — ${Math.round(t.sim * 100)}% relevant]\n` +
+      `Previously asked: "${t.prompt}"\n` +
+      (t.response ? `Prior response summary: ${t.response.slice(0, 250)}` : '') +
+      (t.score != null ? `\nPrevious score: ${t.score}%` : '')
+    ).join('\n\n---\n\n')
+  },
+}
+
+// ── Dynamic Prompt Builder (RAG-powered, no hardcoded templates) ──────────
+const DPB = {
+  detectDomain(p) {
+    const t = p.toLowerCase()
+    const rules = [
+      [/\b(react|vue|angular|nextjs|python|javascript|typescript|rust|golang|java|kotlin|swift|sql|api|backend|frontend|docker|kubernetes|git|npm|webpack|vite|node)\b/, 'software'],
+      [/\b(machine learning|neural|deep learning|llm|gpt|model|dataset|training|inference|embedding|vector|rag|fine.?tun|transformer|bert|diffusion)\b/, 'ai_ml'],
+      [/\b(stock|invest|portfolio|crypto|bitcoin|etf|roi|dividend|equity|fund|forex|recession|inflation|budget|saving|p\/e|cagr|compound)\b/, 'finance'],
+      [/\b(chemistry|biology|physics|quantum|genetics|evolution|organism|molecule|atom|reaction|experiment|hypothesis|ecology|genetics)\b/, 'science'],
+      [/\b(calculus|derivative|integral|matrix|algebra|geometry|probability|statistics|theorem|proof|linear algebra|differential)\b/, 'mathematics'],
+      [/\b(health|fitness|diet|exercise|medical|symptom|treatment|nutrition|sleep|therapy|mental health|supplement|medication)\b/, 'health'],
+      [/\b(marketing|brand|launch|campaign|gtm|growth|saas|startup|pitch|positioning|audience|content strategy|product market)\b/, 'business'],
+      [/\b(write|essay|blog|email|letter|story|poem|caption|newsletter|script|copy|draft|article|proposal|cover letter)\b/, 'writing'],
+      [/\b(recipe|cook|bake|ingredient|meal|food|dish|cuisine|kitchen)\b/, 'cooking'],
+      [/\b(law|legal|contract|regulation|compliance|rights|court|clause|statute)\b/, 'legal'],
+    ]
+    for (const [re, d] of rules) if (re.test(t)) return d
+    return 'general'
+  },
+
+  detectOutputType(p) {
+    const t = p.toLowerCase()
+    if (/\b(step[- ]by[- ]step|how to|tutorial|guide|walkthrough)\b/.test(t)) return 'steps'
+    if (/\b(compare|vs|versus|difference|pros.?cons|better|which is)\b/.test(t)) return 'comparison'
+    if (/\b(fix|debug|error|bug|broken|not working|fails|crash)\b/.test(t)) return 'debug'
+    if (/\b(build|implement|develop|code|script|app|api|create a|make a)\b/.test(t)) return 'build'
+    if (/\b(explain|what is|how does|understand|why does|what are)\b/.test(t)) return 'explain'
+    if (/\b(analyze|review|evaluate|assess|critique|audit)\b/.test(t)) return 'analysis'
+    if (/\b(plan|strategy|roadmap|schedule|organize)\b/.test(t)) return 'plan'
+    if (/\b(calculate|solve|compute|find|equation|simplify|factor)\b/.test(t)) return 'solve'
+    if (/\b(should i|recommend|best|pick|choose|worth it|which one)\b/.test(t)) return 'decide'
+    if (/\b(write|draft|generate text|compose|create content)\b/.test(t)) return 'create'
+    return 'explore'
+  },
+
+  expertPersona(domain) {
+    return ({
+      software:    'Senior Software Engineer (12 years, ex-FAANG)',
+      ai_ml:       'Machine Learning Engineer and AI Researcher',
+      finance:     'Chartered Financial Analyst with 15 years in equity markets',
+      science:     'Research Scientist with PhD and 10 years laboratory experience',
+      mathematics: 'Mathematics Professor who makes every reasoning step visible',
+      health:      'Board-certified physician and evidence-based health coach',
+      business:    'Strategy consultant who has advised 50+ startups and Fortune 500s',
+      writing:     'Senior Content Strategist with 15 years at top-tier publications',
+      cooking:     'Professional chef with culinary school background',
+      legal:       'Experienced attorney (informational purposes — not legal advice)',
+      general:     'World-class expert in the relevant domain',
+    })[domain] || 'World-class expert'
+  },
+
+  selectTechniques(domain, outputType) {
+    const byOutput = {
+      debug:      ['Root Cause Analysis', 'Tree of Thought', 'Systematic Elimination'],
+      build:      ['Spec-First Architecture', 'Few-Shot Expert', 'MVP Blueprint'],
+      explain:    ['Feynman Technique', 'Socratic Method', 'Chain-of-Thought'],
+      steps:      ['Chain-of-Thought', 'First Principles', 'Worked Examples'],
+      analysis:   ['Expert Panel', "Devil's Advocate", 'Comparative Analysis'],
+      comparison: ['Comparative Analysis', 'Decision Matrix', "Devil's Advocate"],
+      plan:       ['First Principles', 'Tree of Thought', 'Chain-of-Thought'],
+      solve:      ['Chain-of-Thought', 'Worked Examples', 'Socratic Method'],
+      decide:     ['Decision Matrix', 'Expert Panel', "Devil's Advocate"],
+      create:     ['Few-Shot Expert', 'Expert Persona', 'First Principles'],
+      explore:    ['Expert Panel', 'Chain-of-Thought', 'Socratic Method'],
+    }
+    const domainBoost = {
+      software:    ['Chain-of-Thought', 'Root Cause Analysis'],
+      ai_ml:       ['First Principles', 'Comparative Analysis'],
+      finance:     ['Chain-of-Thought', 'Few-Shot Expert'],
+      mathematics: ['Chain-of-Thought', 'Worked Examples'],
+    }
+    const pool = [...new Set([
+      ...(byOutput[outputType] || byOutput.explore),
+      ...(domainBoost[domain] || []),
+    ])].slice(0, 5)
+    return [...pool].sort(() => Math.random() - 0.5).slice(0, 3)
+  },
+
+  buildPrompt(technique, userPrompt, persona, ctxBlock) {
+    const ctx = ctxBlock
+      ? `\n\n[SESSION CONTEXT — use only where relevant]\n${ctxBlock}\n` : ''
+    const t = technique
+    const q = userPrompt
+
+    if (t === 'Chain-of-Thought') return [
+      `You are a ${persona}.${ctx}`,
+      `Task: "${q}"`, '',
+      'Think step by step — show every reasoning move:',
+      'STEP 1 — UNDERSTAND: Restate precisely. Surface hidden assumptions.',
+      'STEP 2 — ANALYZE: Key factors. Why this approach over alternatives.',
+      'STEP 3 — EXECUTE: Full detail. Real examples, specific numbers, no placeholders.',
+      'STEP 4 — VERIFY: How we confirm correctness. What would disprove it.',
+      'STEP 5 — NEXT ACTION: The single most important thing to do now.',
+    ].join('\n')
+
+    if (t === 'Feynman Technique') return [
+      `Apply the Feynman Technique to: "${q}"${ctx}`, '',
+      'LEVEL 1 — SIMPLE: Explain to a curious 14-year-old. Real-world analogy, zero jargon.',
+      'LEVEL 2 — GAPS: What was hand-wavy? List 3 things needing deeper understanding.',
+      'LEVEL 3 — PRECISE: Explain those gaps rigorously with correct terminology.',
+      'LEVEL 4 — ANALOGY: One analogy so vivid it cannot be forgotten. Where it breaks down.',
+      'LEVEL 5 — TEST: One question whose correct answer proves genuine comprehension.',
+    ].join('\n')
+
+    if (t === 'Socratic Method') return [
+      `Socratic guide for: "${q}"${ctx}`, '',
+      'PHASE 1 — DIAGNOSE: Ask 3 targeted questions to find where understanding breaks down. Wait for my answers.',
+      'PHASE 2 — TARGETED: Based on answers, explain only what I actually need. Simple → precise.',
+      'PHASE 3 — APPLY: A specific problem/scenario that proves understanding.',
+      'PHASE 4 — EDGE: The counterintuitive case experts know but beginners miss.',
+      'PHASE 5 — CONNECT: 3 related concepts to explore next and how they connect.',
+    ].join('\n')
+
+    if (t === 'Expert Panel') return [
+      `3-expert panel on: "${q}"${ctx}`, '',
+      'EXPERT 1 — PRACTITIONER: Real-world experience. Critical insight. #1 mistake seen.',
+      'EXPERT 2 — RESEARCHER: Evidence-based take. Most important finding. Where wisdom is wrong.',
+      'EXPERT 3 — SKEPTIC: What both miss. Most overlooked factor. The unasked question.',
+      'VERDICT: Where all agree. Key disagreement. Single most actionable takeaway.',
+    ].join('\n')
+
+    if (t === "Devil's Advocate") return [
+      `You are a brilliant contrarian expert. Question: "${q}"${ctx}`, '',
+      'STANDARD VIEW: Conventional expert answer in 2-3 sentences.',
+      'CHALLENGE: Assumption 1 everyone makes → why wrong. Assumption 2 → why wrong. Assumption 3 → why wrong.',
+      'CONTRARIAN: What top 1% say that contradicts wisdom. Evidence supporting this.',
+      'SYNTHESIS: Where conventional wisdom is right. Where contrarian is right. Most defensible nuanced position.',
+    ].join('\n')
+
+    if (t === 'Root Cause Analysis') return [
+      `You are a ${persona}. Issue: "${q}"${ctx}`, '',
+      'STEP 1 — SYMPTOMS: Quote exact error/problem. Parse what each part means.',
+      'STEP 2 — REPRODUCE: Minimum case. Conditions where it does NOT occur.',
+      'STEP 3 — CANDIDATES (rank): Candidate 1: hypothesis → evidence for/against. Candidate 2: same.',
+      'STEP 4 — VERIFY: Exact command/log to confirm root cause.',
+      'STEP 5 — FIX: BEFORE (broken) / AFTER (fixed) / Why this works: [mechanism]',
+      'STEP 6 — PREVENT: One guardrail stopping this entire class of problem permanently.',
+    ].join('\n')
+
+    if (t === 'Comparative Analysis') return [
+      `You are a ${persona}. Compare: "${q}"${ctx}`, '',
+      'DIMENSION 1 — CORE DIFFERENCES: What fundamentally distinguishes each option.',
+      'DIMENSION 2 — TRADE-OFFS: What each optimizes for. What each sacrifices.',
+      'DIMENSION 3 — REAL-WORLD: Specific examples, benchmarks, actual numbers.',
+      'DIMENSION 4 — WHEN TO CHOOSE EACH: Exact conditions that make each the right pick.',
+      'VERDICT: Stronger option and why. Single piece of info that would flip recommendation.',
+    ].join('\n')
+
+    if (t === 'Decision Matrix') return [
+      `Help me decide: "${q}"${ctx}`, '',
+      'STEP 1 — CRITERIA: 4-5 most important factors. Assign weights (total 100%).',
+      'STEP 2 — SCORE: Each option × criterion: score 1-10 with one-line reason. Weighted score table.',
+      'STEP 3 — SENSITIVITY: Which criterion is decision most sensitive to? What if weight changed?',
+      'STEP 4 — HIDDEN COSTS: What the matrix misses that could override the numbers.',
+      'STEP 5 — RECOMMENDATION: Clearest choice. One condition that would change it.',
+    ].join('\n')
+
+    if (t === 'Few-Shot Expert') return [
+      `You are a ${persona}. Task: "${q}"${ctx}`, '',
+      'First show ONE worked example of expert-level output for a similar task (choose your own similar case).',
+      '--- EXAMPLE START ---',
+      '[Your chosen example with full expert treatment]',
+      '--- EXAMPLE END ---', '',
+      'Now apply that same depth to my task above.',
+      'After: WHAT MAKES THIS EXPERT-LEVEL: [2-3 key moves]. COMMON MISTAKE: [what a beginner would do]. NEXT STEP: [logical follow-on].',
+    ].join('\n')
+
+    if (t === 'First Principles') return [
+      `You are a ${persona}. Question: "${q}"${ctx}`, '',
+      'STEP 1 — CERTAINTIES: Facts that cannot be disputed. Label assumptions clearly.',
+      'STEP 2 — COMPONENTS: Fundamental building blocks of this problem/topic.',
+      'STEP 3 — REBUILD: From only Step 1 facts, construct the answer. Show reasoning chain.',
+      'STEP 4 — CONTRAST: Where this first-principles view differs from common assumptions.',
+      'STEP 5 — IMPLICATION: What you can do differently because of this view that others cannot.',
+    ].join('\n')
+
+    if (t === 'Tree of Thought') return [
+      `You are a ${persona}. Problem: "${q}"${ctx}`, '',
+      'BRANCH A — CONVENTIONAL: How it works. Pros. Fatal flaw.',
+      'BRANCH B — ALTERNATIVE: How it works. What it does better. What it sacrifices.',
+      'BRANCH C — UNCONVENTIONAL: How it works. Why people overlook it. When it dominates.',
+      'EVALUATION: Score each branch — Speed / Robustness / Simplicity (1-10 each).',
+      'RECOMMENDATION: Winning branch for this specific context. Exact next steps to execute it.',
+    ].join('\n')
+
+    if (t === 'Worked Examples') return [
+      `You are a ${persona}. Topic: "${q}"${ctx}`, '',
+      'EXAMPLE 1 — SIMPLE CASE: A simpler version. Walk through every step with full reasoning.',
+      'EXAMPLE 2 — REALISTIC CASE: Real numbers/names. Full solution with visible reasoning.',
+      `ORIGINAL PROBLEM: Now solve "${q}" using the same method. Show every step.`,
+      'GENERAL PATTERN: The rule or formula this problem illustrates.',
+      'COMMON MISTAKES: Top 2 errors. Show wrong → right.',
+    ].join('\n')
+
+    if (t === 'Spec-First Architecture') return [
+      `You are a ${persona}. Project: "${q}"${ctx}`, '',
+      'REQUIREMENTS: Core features (must-have vs nice-to-have). User flows. Edge cases.',
+      'TECH DECISIONS: For each choice — name + version + why over top alternative.',
+      'DATA MODEL: Every entity, field, type, relationship. Show as schema.',
+      'FILE STRUCTURE: Every file/folder with one-line purpose.',
+      'IMPLEMENTATION ORDER: Step by step from blank machine to deployed.',
+      'SETUP COMMANDS: Copy-paste ready.',
+      'TOP 3 PITFALLS: What breaks first. How to prevent each.',
+    ].join('\n')
+
+    if (t === 'MVP Blueprint') return [
+      `You are a startup engineer (8 years) who ships fast. Task: "${q}"${ctx}`, '',
+      'MVP SCOPE: Include ONLY the 3 features that prove core value. Defer everything else.',
+      'TECH: Simplest stack that works — one framework + one database + one hosting.',
+      'SETUP: Every command from blank terminal to running app. Copy-paste ready.',
+      'FIRST FILE: Complete content — zero placeholders.',
+      'DONE WHEN: Exact test that proves the MVP works end-to-end.',
+    ].join('\n')
+
+    if (t === 'Systematic Elimination') return [
+      `You are a ${persona}. Debug: "${q}"${ctx}`, '',
+      'LIST ALL SUSPECTS: Every possible cause of this issue.',
+      'ELIMINATE: For each — evidence it IS the cause / evidence it is NOT.',
+      'REMAINING CANDIDATE: The one not eliminated. Why it survives.',
+      'CONFIRM: Exact test that proves or disproves the remaining candidate.',
+      'FIX + VERIFY: Complete fix with before/after. Proof it works.',
+    ].join('\n')
+
+    // Generic fallback for any other technique name
+    return [
+      `You are a ${persona}. Apply ${t} to: "${q}"${ctx}`, '',
+      '1. Fully understand what is being asked — restate precisely.',
+      '2. Break into core components.',
+      '3. Address each with specific, concrete detail.',
+      '4. Use real examples, actual numbers, verifiable facts.',
+      '5. End with the single most actionable next step.',
+    ].join('\n')
+  },
+
+  build(prompt) {
+    const domain      = this.detectDomain(prompt)
+    const outputType  = this.detectOutputType(prompt)
+    const persona     = this.expertPersona(domain)
+    const techniques  = this.selectTechniques(domain, outputType)
+    const ctxBlock    = RAG_STORE.buildContextBlock(prompt)
+
+    const TECH_LABELS = {
+      'Chain-of-Thought':        { emoji: '⛓', why: 'Makes every reasoning step explicit — no skipped logic' },
+      'Feynman Technique':       { emoji: '🧠', why: 'Forces genuine clarity — if you cannot explain it simply, you do not understand it' },
+      'Socratic Method':         { emoji: '🔬', why: 'Guided questions surface real gaps — not generic answers' },
+      'Expert Panel':            { emoji: '🎓', why: 'Multiple expert angles expose blind spots any single view misses' },
+      "Devil's Advocate":        { emoji: '😈', why: 'Challenging assumptions forces you to defend or refine your thinking' },
+      'Root Cause Analysis':     { emoji: '🔍', why: 'Finds the real cause, not symptoms — prevents recurrence' },
+      'Comparative Analysis':    { emoji: '⚖️', why: 'Structured comparison surfaces trade-offs a simple answer would miss' },
+      'Decision Matrix':         { emoji: '📊', why: 'Scores options against weighted criteria — removes gut-feel bias' },
+      'Few-Shot Expert':         { emoji: '🎯', why: 'Shows the exact quality standard via examples before applying to your case' },
+      'First Principles':        { emoji: '🧱', why: 'Strips assumptions — rebuilds from what is fundamentally true' },
+      'Tree of Thought':         { emoji: '🌳', why: 'Explores multiple paths simultaneously — picks the strongest branch' },
+      'Worked Examples':         { emoji: '📐', why: 'Seeing solved examples first builds pattern recognition' },
+      'Spec-First Architecture': { emoji: '⚙️', why: 'Thinks through the full system before writing a single line' },
+      'MVP Blueprint':           { emoji: '🚀', why: 'Fastest path from zero to something working' },
+      'Systematic Elimination':  { emoji: '🗑️', why: 'Methodically rules out causes until only the real one remains' },
+    }
+
+    return techniques.map((tech, i) => {
+      const meta = TECH_LABELS[tech] || { emoji: '✦', why: `${tech} applied to this specific task` }
+      return {
+        id:          `r${i + 1}`,
+        label:       `${meta.emoji} ${tech}`,
+        technique:   tech,
+        why:         meta.why,
+        prompt:      this.buildPrompt(tech, prompt, persona, i === 0 ? ctxBlock : null),
+        recommended: i === 0,
+        domain,
+        outputType,
+        hasContext:  i === 0 && !!ctxBlock,
+      }
+    })
+  },
+}
+
 // ── Install / lifecycle tracking ──────────────────────────────────────────────
 // Generates a random anonymous ID once and reuses it — no PII collected.
 async function getCID() {
@@ -79,34 +405,46 @@ async function route(msg) {
       } catch (e) { console.warn('[PET] backend unavailable') }
     }
 
-    // Tier 3: offline static templates
-    return { ok: true, rewrites: instant(prompt), source: 'instant' }
+    // Tier 3: RAG-powered dynamic builder (no hardcoded templates)
+    const ragRewrites = DPB.build(prompt)
+    return { ok: true, rewrites: ragRewrites, source: 'instant', contextUsed: ragRewrites[0]?.hasContext || false }
   }
 
   if (msg.type === 'EVALUATE') {
     if (!msg.question || !msg.response) return { ok: false, error: 'missing fields' }
 
     const keys = await getKeys()
+    let evalResult = null
 
     // Tier 1: Ollama
     if (keys.ollama_model) {
       try {
         const data = await ollamaEvaluate(msg.question, msg.response, keys.ollama_model, msg.session_id)
-        if (data?.score !== undefined) return { ok: true, ...data, source: 'ollama' }
+        if (data?.score !== undefined) evalResult = { ok: true, ...data, source: 'ollama' }
       } catch (e) { console.warn('[PET] Ollama eval unavailable:', e.message) }
     }
 
     // Tier 2: Groq/OpenAI backend
-    const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
-    if (key) {
-      try {
-        const data = await post('/evaluate', { question: msg.question, response: msg.response, api_key: key, session_id: msg.session_id })
-        if (data?.score !== undefined) return { ok: true, ...data }
-      } catch (e) { console.warn('[PET] eval backend unavailable') }
+    if (!evalResult) {
+      const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
+      if (key) {
+        try {
+          const data = await post('/evaluate', { question: msg.question, response: msg.response, api_key: key, session_id: msg.session_id })
+          if (data?.score !== undefined) evalResult = { ok: true, ...data }
+        } catch (e) { console.warn('[PET] eval backend unavailable') }
+      }
     }
 
     // Tier 3: rule-based scorer
-    return ruleScore(msg.question, msg.response)
+    if (!evalResult) evalResult = ruleScore(msg.question, msg.response)
+
+    // Store turn in RAG session memory for future context-aware rewrites
+    if (evalResult?.score != null) {
+      const domain = DPB.detectDomain(msg.question)
+      RAG_STORE.add(msg.question, msg.response.slice(0, 600), domain, evalResult.score)
+    }
+
+    return evalResult
   }
 
   return { ok: false, error: 'unknown type' }

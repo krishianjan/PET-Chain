@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import SpritePlayer, { SPRITE_CONFIG } from './SpritePlayer'
 
 // ── CSS animations driven by data-state on the wrapper ────────────────────
-// These fire only when Lottie fails (emoji fallback mode)
 const CSS = `
 @keyframes _pet_bob  {0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.04)}}
 @keyframes _pet_walk {0%,100%{transform:translateX(0) rotate(0deg)}25%{transform:translateX(-7px) rotate(-4deg)}75%{transform:translateX(7px) rotate(4deg)}}
@@ -25,7 +24,7 @@ const CSS = `
 [data-lp][data-state=celebrating]  .pet-emoji{animation:_pet_jump   .52s cubic-bezier(.36,.07,.19,.97) 8;filter:drop-shadow(0 0 12px rgba(74,222,128,.7))}
 [data-lp][data-state=error]        .pet-emoji{animation:_pet_err    .35s cubic-bezier(.36,.07,.19,.97) 5;filter:drop-shadow(0 0 8px rgba(248,113,113,.7))}
 
-/* ── Bird: visual differentiation per state (one Lottie file, varied via CSS) ── */
+/* ── Bird: visual differentiation per state via CSS speed ── */
 [data-lp][data-pet=bird][data-state=idle]        .pet-lottie{animation:_pet_float 3s ease-in-out infinite}
 [data-lp][data-pet=bird][data-state=thinking]    .pet-lottie{animation:_pet_tilt  .6s ease-in-out infinite}
 [data-lp][data-pet=bird][data-state=analyzing]   .pet-lottie{animation:_pet_spin  2.5s linear infinite}
@@ -44,7 +43,6 @@ const SPRITE_PETS = new Set(Object.keys(SPRITE_CONFIG))
 let cssInjected = false
 function injectCSS() {
   if (cssInjected || typeof document === 'undefined') return
-  // Remove old style if present (hot reload / re-mount)
   document.getElementById('_pet_lp_css')?.remove()
   const s = document.createElement('style')
   s.id = '_pet_lp_css'
@@ -54,13 +52,12 @@ function injectCSS() {
 }
 
 export default function LottiePlayer({ controllerRef, petType }) {
-  const lottieRef  = useRef(null)   // inner div — Lottie renders into this
-  const wrapperRef = useRef(null)   // outer div — holds data-state for CSS
+  const lottieRef  = useRef(null)
+  const wrapperRef = useRef(null)
 
-  // true once Lottie/sprite successfully renders
-  const [hasLottie, setHasLottie] = useState(false)
-  // current animation state (for sprite pets)
-  const [animState, setAnimState] = useState('idle')
+  // Start as null (unknown) so we can show emoji immediately, then hide once Lottie confirms
+  const [lottieState, setLottieState] = useState('pending') // 'pending' | 'ok' | 'failed'
+  const [animState,   setAnimState]   = useState('idle')
 
   const isSpritePet = SPRITE_PETS.has(petType)
 
@@ -72,16 +69,27 @@ export default function LottiePlayer({ controllerRef, petType }) {
     const ctrl = controllerRef?.current
     if (!ctrl || !wrapperRef.current) return
 
-    // Subscribe to lottie-ready and state-change callbacks
-    ctrl.onLottieReady = (ok) => setHasLottie(ok)
+    // Reset so emoji shows immediately for new pet while Lottie loads
+    setLottieState('pending')
+
+    ctrl.onLottieReady = (ok) => setLottieState(ok ? 'ok' : 'failed')
     ctrl.onStateChange = (state) => setAnimState(state)
 
     if (isSpritePet) {
-      // Sprite pets: skip Lottie entirely, signal ready immediately
       ctrl.init(null, wrapperRef.current, petType).catch(() => {})
     } else {
-      if (!lottieRef.current) return
-      ctrl.init(lottieRef.current, wrapperRef.current, petType || 'dog').catch(() => {})
+      // lottieRef might not be set yet on first render — retry via rAF
+      const tryInit = () => {
+        if (lottieRef.current) {
+          ctrl.init(lottieRef.current, wrapperRef.current, petType || 'dog').catch(() => {
+            setLottieState('failed')
+          })
+        } else {
+          // Ref not attached yet — wait one frame
+          requestAnimationFrame(tryInit)
+        }
+      }
+      tryInit()
     }
 
     return () => {
@@ -92,6 +100,12 @@ export default function LottiePlayer({ controllerRef, petType }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [petType])
 
+  // Emoji is shown when: sprite pet has no sprite, OR lottie hasn't loaded yet / failed
+  // For sprite pets, SpritePlayer handles rendering; emoji is purely the non-sprite fallback
+  const showEmoji = !isSpritePet && lottieState !== 'ok'
+  // Lottie canvas visible only once confirmed loaded (avoids blank canvas flash)
+  const lottiVisible = !isSpritePet && lottieState === 'ok'
+
   return (
     <div
       ref={wrapperRef}
@@ -100,33 +114,42 @@ export default function LottiePlayer({ controllerRef, petType }) {
       data-pet={petType}
       style={{ width: 80, height: 80, position: 'relative', userSelect: 'none', overflow: 'hidden', contain: 'layout' }}
     >
-      {/* Sprite renderer for rabbit/human — shown instead of Lottie */}
+      {/* Sprite renderer for rabbit/human */}
       {isSpritePet && (
         <SpritePlayer petType={petType} animState={animState} />
       )}
 
-      {/* Lottie canvas — only mounted for non-sprite pets */}
+      {/* Lottie canvas — always mounted for non-sprite pets so ref attaches */}
       {!isSpritePet && (
         <div
           ref={lottieRef}
           className="pet-lottie"
-          style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+          style={{
+            width: '100%', height: '100%',
+            position: 'absolute', inset: 0,
+            // Invisible until Lottie confirms it loaded — prevents blank canvas over emoji
+            opacity: lottiVisible ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+          }}
         />
       )}
 
-      {/* Emoji fallback — visible when no Lottie AND no sprite */}
-      {!isSpritePet && (
+      {/* Emoji fallback — shows immediately for non-sprite pets until Lottie loads */}
+      {showEmoji && (
         <div
           className="pet-emoji"
           style={{
             position:       'absolute',
             inset:          0,
-            display:        hasLottie ? 'none' : 'flex',
+            display:        'flex',
             alignItems:     'center',
             justifyContent: 'center',
             fontSize:       44,
             lineHeight:     1,
             pointerEvents:  'none',
+            // Fade out smoothly when Lottie takes over
+            opacity:        lottieState === 'pending' ? 1 : 0,
+            transition:     'opacity 0.3s ease',
           }}
         >
           {PET_EMOJI[petType] || '🐕'}
