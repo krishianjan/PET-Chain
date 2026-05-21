@@ -29,7 +29,18 @@ export default function PetWidget() {
   const [showPicker, setShowPicker] = useState(false)
   const [petName,  setPetName]  = useState('')
 
-  const posRef   = useRef({ x: window.innerWidth - 96, y: window.innerHeight - 110 })
+  // Default position: bottom-right corner — always visible on any screen
+  const defaultPos = () => ({
+    x: Math.max(0, window.innerWidth  - 96),
+    y: Math.max(0, window.innerHeight - 110),
+  })
+  // Clamp a stored position to the current viewport so pet is never off-screen
+  const clampPos = (p) => ({
+    x: Math.max(0, Math.min(window.innerWidth  - 80, p.x ?? defaultPos().x)),
+    y: Math.max(0, Math.min(window.innerHeight - 80, p.y ?? defaultPos().y)),
+  })
+
+  const posRef   = useRef(defaultPos())
   const [pos, setPos]   = useState(posRef.current)
   const drag            = useRef({ on: false, moved: false, ox: 0, oy: 0 })
   const clickCount      = useRef(0)
@@ -38,15 +49,17 @@ export default function PetWidget() {
 
   // ── Load saved prefs ────────────────────────────────────────────────────
   useEffect(() => {
+    // Mark ready immediately so the pet renders at the default position right away
+    setReady(true)
     chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model','pet_name'], r => {
       const t = r.pet_type || 'dog'
-      const p = r.pet_pos  || posRef.current
+      // Clamp stored position to current viewport — prevents off-screen pet
+      const p = r.pet_pos ? clampPos(r.pet_pos) : posRef.current
       setPtype(t)
       posRef.current = p
       setPos(p)
       setKeys({ groq: r.pet_key_groq, openai: r.pet_key_openai, deepseek: r.pet_key_deepseek, ollama_model: r.pet_ollama_model || null })
       if (r.pet_name) setPetName(r.pet_name)
-      setReady(true)
       if (!r.pet_type) setPanel(S.OPEN)   // first launch → open sidebar
     })
   }, [])
@@ -153,8 +166,6 @@ export default function PetWidget() {
     ctrl.current?.setPetType(t)
     setShowPicker(false)
   }
-
-  if (!ready) return null
 
   return (
     <>
