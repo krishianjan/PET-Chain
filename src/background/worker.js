@@ -60,12 +60,25 @@ const DPB = {
   // Strip any existing PET wrapper — prevents Task:"Task:"..." double-nesting
   stripWrapper(raw) {
     const t = raw.trim()
-    // "You are a [persona]. Task/Question/Project/etc: "user question""
-    const m = t.match(/^(?:You are [\s\S]{3,150}?\.\s*)(?:Task|Question|Problem|Topic|Project|Debug|Issue|My task):\s*"([\s\S]+?)"(?:\s*\n|$)/im)
-    if (m?.[1] && m[1].length < t.length * 0.8) return m[1].trim()
-    // "3-expert panel on: "..." / "Help me decide: "..." / "Apply X to: "...""
-    const m2 = t.match(/^(?:3-expert panel on|Help me decide|Socratic guide for|Apply .{3,50} to):\s*"([\s\S]+?)"(?:\s*\n|$)/im)
-    if (m2?.[1] && m2[1].length < t.length * 0.8) return m2[1].trim()
+    if (t.length < 80) return raw  // too short to contain a wrapper
+
+    // Strategy 1 — look for the FIRST "Label: "user content"" within the first 600 chars.
+    // This catches ALL PET templates:
+    //   Task:, Project goal:, Topic to explain:, Guide me through:,
+    //   Issue to diagnose:, Compare:, My task:, Question:, Problem:, etc.
+    const head = t.slice(0, 700)
+    // Match a line-start label (capitalised word(s)) followed by : "content"
+    const m = head.match(/(?:^|\n)[A-Z3][A-Za-z ,\-]*?:\s*"([^"]{10,400})"/m)
+    if (m?.[1]) {
+      const ex = m[1].trim()
+      // Only accept if the extracted content is much shorter than the full wrapped prompt
+      if (ex.length >= 10 && ex.length < t.length * 0.65) return ex
+    }
+
+    // Strategy 2 — persona-less openers like "3-expert panel on: "..." / "Help me decide: "...""
+    const m2 = t.match(/^(?:3-expert panel on|Help me decide|Socratic guide for|Apply .{3,50} to):\s*"([^"]{10,400})"(?:\s*\n|$)/im)
+    if (m2?.[1] && m2[1].length < t.length * 0.65) return m2[1].trim()
+
     return raw
   },
 
