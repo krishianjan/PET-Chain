@@ -54,15 +54,29 @@ const RAG_STORE = {
   },
 }
 
-// ── Dynamic Prompt Builder (RAG-powered, no hardcoded templates) ──────────
+// ── Dynamic Prompt Builder (RAG-powered, intent-aware) ────────────────────
 const DPB = {
+
+  // Strip any existing PET wrapper — prevents Task:"Task:"..." double-nesting
+  stripWrapper(raw) {
+    const t = raw.trim()
+    // "You are a [persona]. Task/Question/Project/etc: "user question""
+    const m = t.match(/^(?:You are [\s\S]{3,150}?\.\s*)(?:Task|Question|Problem|Topic|Project|Debug|Issue|My task):\s*"([\s\S]+?)"(?:\s*\n|$)/im)
+    if (m?.[1] && m[1].length < t.length * 0.8) return m[1].trim()
+    // "3-expert panel on: "..." / "Help me decide: "..." / "Apply X to: "...""
+    const m2 = t.match(/^(?:3-expert panel on|Help me decide|Socratic guide for|Apply .{3,50} to):\s*"([\s\S]+?)"(?:\s*\n|$)/im)
+    if (m2?.[1] && m2[1].length < t.length * 0.8) return m2[1].trim()
+    return raw
+  },
+
   detectDomain(p) {
     const t = p.toLowerCase()
     const rules = [
-      [/\b(react|vue|angular|nextjs|python|javascript|typescript|rust|golang|java|kotlin|swift|sql|api|backend|frontend|docker|kubernetes|git|npm|webpack|vite|node)\b/, 'software'],
+      // Software/web — expanded to catch fullstack, website, hosting, vibe coding
+      [/\b(react|vue|angular|nextjs|python|javascript|typescript|rust|golang|java|kotlin|swift|sql|api|backend|frontend|docker|kubernetes|git|npm|webpack|vite|node|fullstack|full.?stack|website|web.?app|webapp|deploy|hosting|vercel|netlify|aws|heroku|railway|supabase|firebase|prisma|express|fastapi|django|flask|vibe.?cod|vibecod)\b/, 'software'],
       [/\b(machine learning|neural|deep learning|llm|gpt|model|dataset|training|inference|embedding|vector|rag|fine.?tun|transformer|bert|diffusion)\b/, 'ai_ml'],
       [/\b(stock|invest|portfolio|crypto|bitcoin|etf|roi|dividend|equity|fund|forex|recession|inflation|budget|saving|p\/e|cagr|compound)\b/, 'finance'],
-      [/\b(chemistry|biology|physics|quantum|genetics|evolution|organism|molecule|atom|reaction|experiment|hypothesis|ecology|genetics)\b/, 'science'],
+      [/\b(chemistry|biology|physics|quantum|genetics|evolution|organism|molecule|atom|reaction|experiment|hypothesis|ecology)\b/, 'science'],
       [/\b(calculus|derivative|integral|matrix|algebra|geometry|probability|statistics|theorem|proof|linear algebra|differential)\b/, 'mathematics'],
       [/\b(health|fitness|diet|exercise|medical|symptom|treatment|nutrition|sleep|therapy|mental health|supplement|medication)\b/, 'health'],
       [/\b(marketing|brand|launch|campaign|gtm|growth|saas|startup|pitch|positioning|audience|content strategy|product market)\b/, 'business'],
@@ -76,20 +90,30 @@ const DPB = {
 
   detectOutputType(p) {
     const t = p.toLowerCase()
-    if (/\b(step[- ]by[- ]step|how to|tutorial|guide|walkthrough)\b/.test(t)) return 'steps'
+    // roadmap/guide/steps checked FIRST — wins over 'build' keyword so
+    // "help me build... I need a roadmap" → steps, not build
+    if (/\b(roadmap|step[- ]by[- ]step|how to|tutorial|guide|walkthrough|where (do i |should i |to )?start|what (do i |should i )?need|complete guide|from scratch|from zero|getting started)\b/.test(t)) return 'steps'
+    if (/\b(plan|strategy|schedule|organize)\b/.test(t)) return 'plan'
     if (/\b(compare|vs|versus|difference|pros.?cons|better|which is)\b/.test(t)) return 'comparison'
     if (/\b(fix|debug|error|bug|broken|not working|fails|crash)\b/.test(t)) return 'debug'
     if (/\b(build|implement|develop|code|script|app|api|create a|make a)\b/.test(t)) return 'build'
     if (/\b(explain|what is|how does|understand|why does|what are)\b/.test(t)) return 'explain'
     if (/\b(analyze|review|evaluate|assess|critique|audit)\b/.test(t)) return 'analysis'
-    if (/\b(plan|strategy|roadmap|schedule|organize)\b/.test(t)) return 'plan'
     if (/\b(calculate|solve|compute|find|equation|simplify|factor)\b/.test(t)) return 'solve'
     if (/\b(should i|recommend|best|pick|choose|worth it|which one)\b/.test(t)) return 'decide'
     if (/\b(write|draft|generate text|compose|create content)\b/.test(t)) return 'create'
     return 'explore'
   },
 
-  expertPersona(domain) {
+  // Context-aware persona — detects beginner/newbie, adjusts voice accordingly
+  expertPersona(domain, rawPrompt = '') {
+    const isBeginner = /\b(newbie|beginner|vibe.?cod|just.?start|i don.?t know|no experience|learning to|help me understand|i.?m new|never (done|built|coded)|don.?t know (what|where|how))\b/i.test(rawPrompt)
+    if (isBeginner) {
+      return ({
+        software: 'Senior Full-Stack Developer who has personally mentored 300+ beginners to their first production app — you always give exact tech names, specific commands, real hosting options with pricing, and zero hand-waving',
+        general:  'World-class teacher who explains everything step by step with real examples, assumes no prior knowledge, and always ends with a concrete action',
+      })[domain] || 'World-class expert who teaches beginners concretely — real names, real commands, no assumed knowledge'
+    }
     return ({
       software:    'Senior Software Engineer (12 years, ex-FAANG)',
       ai_ml:       'Machine Learning Engineer and AI Researcher',
@@ -107,22 +131,22 @@ const DPB = {
 
   selectTechniques(domain, outputType) {
     const byOutput = {
-      debug:      ['Root Cause Analysis', 'Tree of Thought', 'Systematic Elimination'],
-      build:      ['Spec-First Architecture', 'Few-Shot Expert', 'MVP Blueprint'],
+      debug:      ['Root Cause Analysis', 'Systematic Elimination', 'Tree of Thought'],
+      build:      ['Spec-First Architecture', 'MVP Blueprint', 'Chain-of-Thought'],
       explain:    ['Feynman Technique', 'Socratic Method', 'Chain-of-Thought'],
-      steps:      ['Chain-of-Thought', 'First Principles', 'Worked Examples'],
+      steps:      ['Chain-of-Thought', 'Spec-First Architecture', 'MVP Blueprint'],
       analysis:   ['Expert Panel', "Devil's Advocate", 'Comparative Analysis'],
       comparison: ['Comparative Analysis', 'Decision Matrix', "Devil's Advocate"],
-      plan:       ['First Principles', 'Tree of Thought', 'Chain-of-Thought'],
+      plan:       ['Spec-First Architecture', 'Chain-of-Thought', 'Tree of Thought'],
       solve:      ['Chain-of-Thought', 'Worked Examples', 'Socratic Method'],
       decide:     ['Decision Matrix', 'Expert Panel', "Devil's Advocate"],
-      create:     ['Few-Shot Expert', 'Expert Persona', 'First Principles'],
-      explore:    ['Expert Panel', 'Chain-of-Thought', 'Socratic Method'],
+      create:     ['Few-Shot Expert', 'Chain-of-Thought', 'First Principles'],
+      explore:    ['Expert Panel', 'Feynman Technique', 'Socratic Method'],
     }
     const domainBoost = {
-      software:    ['Chain-of-Thought', 'Root Cause Analysis'],
+      software:    ['Chain-of-Thought'],
       ai_ml:       ['First Principles', 'Comparative Analysis'],
-      finance:     ['Chain-of-Thought', 'Few-Shot Expert'],
+      finance:     ['Chain-of-Thought', 'Decision Matrix'],
       mathematics: ['Chain-of-Thought', 'Worked Examples'],
     }
     const pool = [...new Set([
@@ -212,13 +236,16 @@ const DPB = {
     ].join('\n')
 
     if (t === 'Few-Shot Expert') return [
-      `You are a ${persona}. Task: "${q}"${ctx}`, '',
-      'First show ONE worked example of expert-level output for a similar task (choose your own similar case).',
-      '--- EXAMPLE START ---',
-      '[Your chosen example with full expert treatment]',
-      '--- EXAMPLE END ---', '',
-      'Now apply that same depth to my task above.',
-      'After: WHAT MAKES THIS EXPERT-LEVEL: [2-3 key moves]. COMMON MISTAKE: [what a beginner would do]. NEXT STEP: [logical follow-on].',
+      `You are a ${persona}.${ctx}`,
+      `My task: "${q}"`, '',
+      'Before answering my task, first show me ONE fully worked example for a similar task you choose yourself.',
+      'Treat that example with complete expert depth — real tech names, real commands or numbers, zero placeholders.',
+      'Then apply that exact same standard and depth to my task above.',
+      '',
+      'End your response with these three lines:',
+      'EXPERT MOVES: 2-3 specific things an expert does here that a beginner would skip',
+      'COMMON MISTAKE: The #1 error people make with this',
+      'YOUR NEXT STEP: One concrete action to take immediately after reading this',
     ].join('\n')
 
     if (t === 'First Principles') return [
@@ -288,10 +315,12 @@ const DPB = {
     ].join('\n')
   },
 
-  build(prompt) {
+  build(rawInput) {
+    // Strip any existing PET wrapper so we never get Task:"Task:"..."" double-nesting
+    const prompt      = this.stripWrapper(rawInput)
     const domain      = this.detectDomain(prompt)
     const outputType  = this.detectOutputType(prompt)
-    const persona     = this.expertPersona(domain)
+    const persona     = this.expertPersona(domain, prompt)  // pass for beginner detection
     const techniques  = this.selectTechniques(domain, outputType)
     const ctxBlock    = RAG_STORE.buildContextBlock(prompt)
 
