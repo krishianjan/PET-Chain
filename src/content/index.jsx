@@ -2,32 +2,33 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import PetWidget from './pet/PetWidget'
 import { detectPlatform } from './detectors/platform'
-import { recordSession } from '../engines/metrics_store'
 
-let _root = null   // React root — kept to avoid creating multiple roots
+const platform = detectPlatform()
+let root = null
 
 function mount() {
-  if (document.getElementById('pet-root')) return
-  const platform = detectPlatform()
-  if (!platform) return
-  recordSession().catch(() => {})
+    if (document.getElementById('pet-root')) return
 
-  const host = document.createElement('div')
-  host.id    = 'pet-root'
-  host.style.cssText = 'position:fixed;z-index:2147483647;top:0;left:0;width:0;height:0;pointer-events:none;overflow:visible;'
-  // Mount directly on <html> element — survives SPA body replacements
-  ;(document.body || document.documentElement).appendChild(host)
-  _root = createRoot(host)
-  _root.render(<PetWidget />)
+    const container = document.createElement('div')
+    container.id = 'pet-root'
+    container.style.cssText = 'position: static; z-index: 2147483647;'
+    document.body.appendChild(container)
+
+    // No shadow DOM – Rnd and styles will work normally
+    root = createRoot(container)
+    root.render(<PetWidget platform={platform} />)
 }
 
-// Watch both documentElement and body for DOM changes that might remove pet-root
-const _obs = new MutationObserver(() => {
-  if (!document.getElementById('pet-root')) setTimeout(mount, 300)
-})
-_obs.observe(document.documentElement, { childList: true, subtree: false })
-if (document.body) {
-  _obs.observe(document.body, { childList: true, subtree: false })
+function keepAlive() {
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById('pet-root')) {
+            setTimeout(mount, 300) // small delay lets SPA finish render
+        }
+    })
+    observer.observe(document.body, { childList: true, subtree: false })
+    // Also observe documentElement for full page swaps
+    observer.observe(document.documentElement, { childList: true })
 }
 
 mount()
+keepAlive()

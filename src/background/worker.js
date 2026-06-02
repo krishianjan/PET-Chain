@@ -1,3 +1,6 @@
+import { petRewrite, petEvaluate } from '../engines/llmRouter.js'
+import { resolveActiveProvider } from '../engines/providerRegistry.js'
+
 const BACKEND      = 'http://localhost:8000'
 const OLLAMA       = 'http://localhost:11434'
 // When you deploy backend publicly, change this to your hosted URL:
@@ -182,10 +185,13 @@ const DPB = {
     const begCtx     = isBeginner
       ? '\nMy level: beginner / vibe coder — prefer simple stacks, low-cost hosting, copy-paste commands, no assumed knowledge.\n'
       : ''
+    // Injected into every template — LLM silently fixes typos/grammar before answering
+    const fixNote    = '*(Before answering: quietly rewrite the task above — fix any spelling, grammar, or unclear wording — then proceed. Do not mention this correction.)*'
 
     if (t === 'Chain-of-Thought') return [
       `You are a ${persona}.${ctx}`,
       `Task: "${q}"`,
+      fixNote,
       begCtx,
       'Think step by step — make every decision and assumption visible:',
       '',
@@ -201,6 +207,7 @@ const DPB = {
     if (t === 'Feynman Technique') return [
       `You are a ${persona}.${ctx}`,
       `Topic to explain: "${q}"`,
+      fixNote,
       begCtx,
       'Apply the Feynman Technique — teach this as if I have zero prior knowledge:',
       '',
@@ -214,6 +221,7 @@ const DPB = {
     if (t === 'Socratic Method') return [
       `You are a ${persona}.${ctx}`,
       `Guide me through: "${q}"`,
+      fixNote,
       begCtx,
       'PHASE 1 — DIAGNOSE: Ask me 3 targeted questions that identify exactly where my understanding breaks down. Wait for my answers before continuing.',
       'PHASE 2 — TARGETED EXPLANATION: Based on my answers, explain only what I actually need — simple first, then precise.',
@@ -224,6 +232,7 @@ const DPB = {
 
     if (t === 'Expert Panel') return [
       `3-expert panel on: "${q}"${ctx}`,
+      fixNote,
       begCtx,
       'EXPERT 1 — PRACTITIONER (in the field 10+ years): What does real-world experience say? Critical insight. The #1 mistake they see in practice.',
       'EXPERT 2 — RESEARCHER (evidence-based): What does the data and research actually show? Where does conventional wisdom contradict evidence?',
@@ -234,6 +243,7 @@ const DPB = {
 
     if (t === "Devil's Advocate") return [
       `You are a brilliant contrarian expert. Question: "${q}"${ctx}`,
+      fixNote,
       '',
       'STANDARD VIEW: The conventional expert answer in 2-3 sentences.',
       'CHALLENGE 1: The biggest assumption everyone makes → why it is wrong or incomplete.',
@@ -248,6 +258,7 @@ const DPB = {
     if (t === 'Root Cause Analysis') return [
       `You are a ${persona}.${ctx}`,
       `Issue to diagnose: "${q}"`,
+      fixNote,
       '',
       'STEP 1 — SYMPTOMS: State the exact problem. Parse what each symptom means technically.',
       'STEP 2 — REPRODUCE: What is the minimum case that triggers it? What conditions make it NOT occur?',
@@ -260,6 +271,7 @@ const DPB = {
     if (t === 'Comparative Analysis') return [
       `You are a ${persona}.${ctx}`,
       `Compare: "${q}"`,
+      fixNote,
       begCtx,
       'DIMENSION 1 — WHAT EACH ACTUALLY IS: The fundamental purpose and design philosophy of each option.',
       'DIMENSION 2 — TRADE-OFFS: What each optimizes for. What each sacrifices. Be specific — not "faster" but "2x faster at X, slower at Y".',
@@ -272,6 +284,7 @@ const DPB = {
 
     if (t === 'Decision Matrix') return [
       `Help me decide: "${q}"${ctx}`,
+      fixNote,
       begCtx,
       'STEP 1 — CRITERIA: List 4-5 factors that matter most for this decision. Assign each a weight (weights must total 100%).',
       'STEP 2 — SCORE: For each option × each criterion: score 1-10 with a one-sentence reason. Show the weighted score table.',
@@ -285,6 +298,7 @@ const DPB = {
     if (t === 'Few-Shot Expert') return [
       `You are a ${persona}.${ctx}`,
       `My task: "${q}"`,
+      fixNote,
       begCtx,
       'Step 1 — Choose a similar task yourself and show me ONE complete expert-level example of how you handle it.',
       'Use real names, real commands, real numbers. Full depth — zero placeholders.',
@@ -303,6 +317,7 @@ const DPB = {
     if (t === 'First Principles') return [
       `You are a ${persona}.${ctx}`,
       `Question: "${q}"`,
+      fixNote,
       begCtx,
       'Break this down to first principles — rebuild from what is undeniably true:',
       '',
@@ -318,6 +333,7 @@ const DPB = {
     if (t === 'Tree of Thought') return [
       `You are a ${persona}.${ctx}`,
       `Problem: "${q}"`,
+      fixNote,
       begCtx,
       'Explore 3 distinct approaches before committing:',
       '',
@@ -335,6 +351,7 @@ const DPB = {
     if (t === 'Worked Examples') return [
       `You are a ${persona}.${ctx}`,
       `Topic: "${q}"`,
+      fixNote,
       begCtx,
       'Build understanding through examples — from simple to realistic:',
       '',
@@ -350,6 +367,7 @@ const DPB = {
     if (t === 'Spec-First Architecture') return [
       `You are a ${persona}.${ctx}`,
       `Project goal: "${q}"`,
+      fixNote,
       begCtx,
       'Your job:',
       '1. Choose the best modern stack for this situation — optimize for ' + (isBeginner ? 'beginner simplicity + production readiness + lowest cost' : 'reliability + developer experience + scalability'),
@@ -375,6 +393,7 @@ const DPB = {
     if (t === 'MVP Blueprint') return [
       `You are a startup engineer (8 years) who ships fast.${ctx}`,
       `Task: "${q}"`,
+      fixNote,
       begCtx,
       'Ship the fastest working version that proves the concept is real.',
       '',
@@ -393,6 +412,7 @@ const DPB = {
     if (t === 'Systematic Elimination') return [
       `You are a ${persona}.${ctx}`,
       `Issue: "${q}"`,
+      fixNote,
       '',
       'LIST ALL SUSPECTS: Every possible cause of this problem, ranked by likelihood.',
       'ELIMINATE: For each candidate — one piece of evidence it IS the cause, one piece it is NOT.',
@@ -407,6 +427,7 @@ const DPB = {
     return [
       `You are a ${persona}.${ctx}`,
       `Task: "${q}"`,
+      fixNote,
       begCtx,
       `Apply ${t} to this task — be specific, not generic:`,
       '',
@@ -510,9 +531,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 })
 
 async function route(msg) {
-  if (msg.type === 'GET_ALL_KEYS')     return getKeys()
-  if (msg.type === 'SET_KEY')          return setKey(msg.provider, msg.key)
-  if (msg.type === 'OLLAMA_MODELS')    return getOllamaModels()
+  if (msg.type === 'GET_ALL_KEYS')       return getKeys()
+  if (msg.type === 'SET_KEY')            return setKey(msg.provider, msg.key)
+  if (msg.type === 'OLLAMA_MODELS')      return getOllamaModels()
+  if (msg.type === 'GET_PROVIDER_CONFIG') return getProviderConfig()
+  if (msg.type === 'SET_PROVIDER_MODEL') return setProviderModel(msg.provider, msg.model)
 
   if (msg.type === 'REWRITE') {
     const prompt = (msg.prompt || '').trim()
@@ -520,7 +543,25 @@ async function route(msg) {
 
     const keys = await getKeys()
 
-    // Tier 1: Ollama (local, free, private) — no key needed
+    // Check v2 flag and user selected provider
+    const state = await chrome.storage.local.get(['pet_v2_enabled', 'pet_active_provider', 'pet_provider_models'])
+    const v2Enabled = state.pet_v2_enabled !== false
+    const selectedModels = state.pet_provider_models || {}
+
+    if (v2Enabled) {
+      const activeProvider = resolveActiveProvider(keys, state.pet_active_provider)
+      if (activeProvider) {
+        const apiKey = activeProvider === 'ollama' ? 'local' : keys[activeProvider]
+        // Prefer: message override → user-selected model for provider → null (uses default)
+        const override = msg.modelOverride || selectedModels[activeProvider] || null
+        const result = await petRewrite(prompt, activeProvider, apiKey, override)
+        if (result.ok && result.rewrites?.length) {
+          return result
+        }
+      }
+    }
+
+    // --- Legacy Fallback if V2 routing fails or is disabled ---
     if (keys.ollama_model) {
       try {
         const data = await ollamaRewrite(prompt, keys.ollama_model, msg.session_id)
@@ -528,7 +569,6 @@ async function route(msg) {
       } catch (e) { console.warn('[PET] Ollama unavailable:', e.message) }
     }
 
-    // Tier 2: Groq/OpenAI backend
     const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
     if (key) {
       try {
@@ -537,7 +577,6 @@ async function route(msg) {
       } catch (e) { console.warn('[PET] backend unavailable') }
     }
 
-    // Tier 3: RAG-powered dynamic builder (no hardcoded templates)
     const ragRewrites = DPB.build(prompt)
     return { ok: true, rewrites: ragRewrites, source: 'instant', contextUsed: ragRewrites[0]?.hasContext || false }
   }
@@ -548,15 +587,31 @@ async function route(msg) {
     const keys = await getKeys()
     let evalResult = null
 
-    // Tier 1: Ollama
-    if (keys.ollama_model) {
+    const state = await chrome.storage.local.get(['pet_v2_enabled', 'pet_active_provider', 'pet_provider_models'])
+    const v2Enabled = state.pet_v2_enabled !== false
+    const selectedModels2 = state.pet_provider_models || {}
+
+    if (v2Enabled) {
+      const activeProvider = resolveActiveProvider(keys, state.pet_active_provider)
+      if (activeProvider) {
+        const apiKey = activeProvider === 'ollama' ? 'local' : keys[activeProvider]
+        const override = msg.modelOverride || selectedModels2[activeProvider] || null
+        evalResult = await petEvaluate(msg.question, msg.response, activeProvider, apiKey, override)
+        if (evalResult?.score !== undefined) {
+          evalResult.ok = true
+          return evalResult
+        }
+      }
+    }
+
+    // --- Legacy Fallback ---
+    if (!evalResult && keys.ollama_model) {
       try {
         const data = await ollamaEvaluate(msg.question, msg.response, keys.ollama_model, msg.session_id)
         if (data?.score !== undefined) evalResult = { ok: true, ...data, source: 'ollama' }
       } catch (e) { console.warn('[PET] Ollama eval unavailable:', e.message) }
     }
 
-    // Tier 2: Groq/OpenAI backend
     if (!evalResult) {
       const key = msg.api_key || keys.groq || keys.openai || keys.deepseek
       if (key) {
@@ -567,10 +622,8 @@ async function route(msg) {
       }
     }
 
-    // Tier 3: rule-based scorer
     if (!evalResult) evalResult = ruleScore(msg.question, msg.response)
 
-    // Store turn in RAG session memory for future context-aware rewrites
     if (evalResult?.score != null) {
       const domain = DPB.detectDomain(msg.question)
       RAG_STORE.add(msg.question, msg.response.slice(0, 600), domain, evalResult.score)
@@ -581,6 +634,7 @@ async function route(msg) {
 
   return { ok: false, error: 'unknown type' }
 }
+
 
 // ── Ollama helpers ────────────────────────────────────────────────────────
 
@@ -609,7 +663,7 @@ async function ollamaChat(model, system, user, maxTokens = 2000) {
       model,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       max_tokens: maxTokens,
-      temperature: 0.75,
+      temperature: 0.9,
       stream: false,
     }),
     signal: AbortSignal.timeout(45000),
@@ -651,6 +705,7 @@ Pick 3 DIFFERENT techniques from: Chain-of-Thought, Socratic Method, Feynman Tec
 const OLLAMA_REWRITE_SYS = `You are a master prompt engineer. Generate 3 DIFFERENT expert prompts for the user's question.
 
 RULES:
+- First: silently correct any spelling or grammar errors in the user's question — use the corrected version in every prompt you write, never the typo-ridden original
 - Each prompt uses a DIFFERENT technique (assigned in the request)
 - Each prompt is tailored to THIS specific question — not a generic template
 - NEVER apply software/tech templates (MVP, architecture, tech stack) to non-tech questions
@@ -2131,20 +2186,57 @@ function ruleScore(question, response, sessionId = 'default') {
   }
 }
 
+const ALL_PROVIDERS = ['gemini','openai','groq','claude','grok','openrouter','deepseek']
+
 function getKeys() {
+  const storageKeys = [
+    ...ALL_PROVIDERS.map(p => `pet_key_${p}`),
+    'pet_ollama_model',
+  ]
   return new Promise(res =>
-    chrome.storage.local.get(['pet_key_groq','pet_key_openai','pet_key_deepseek','pet_key_claude','pet_ollama_model'], r =>
-      res({
-        groq:         r.pet_key_groq         || null,
-        openai:       r.pet_key_openai        || null,
-        deepseek:     r.pet_key_deepseek      || null,
-        claude:       r.pet_key_claude        || null,
-        ollama_model: r.pet_ollama_model      || null,
-      })
-    )
+    chrome.storage.local.get(storageKeys, r => {
+      const keys = {}
+      for (const p of ALL_PROVIDERS) keys[p] = r[`pet_key_${p}`] || null
+      keys.ollama_model = r.pet_ollama_model || null
+      res(keys)
+    })
   )
 }
+
 function setKey(p, k) {
   const storageKey = p === 'ollama_model' ? 'pet_ollama_model' : `pet_key_${p}`
-  return new Promise(res => chrome.storage.local.set({ [storageKey]: k }, () => res({ ok: true })))
+  return new Promise(res => chrome.storage.local.set({ [storageKey]: k || null }, () => res({ ok: true })))
+}
+
+async function getProviderConfig() {
+  const keys  = await getKeys()
+  const state = await new Promise(res => chrome.storage.local.get(
+    ['pet_active_provider', 'pet_provider_models'],
+    r => res(r)
+  ))
+  const activeProvider  = state.pet_active_provider || null
+  const selectedModels  = state.pet_provider_models || {}
+
+  // Build masked key status (boolean only — never send raw key back)
+  const connectedProviders = {}
+  for (const p of ALL_PROVIDERS) connectedProviders[p] = !!keys[p]
+  connectedProviders.ollama = !!keys.ollama_model
+
+  return {
+    ok: true,
+    activeProvider,
+    connectedProviders,
+    selectedModels,
+    ollamaModel: keys.ollama_model || null,
+  }
+}
+
+function setProviderModel(provider, model) {
+  return new Promise(res =>
+    chrome.storage.local.get('pet_provider_models', r => {
+      const models = r.pet_provider_models || {}
+      models[provider] = model
+      chrome.storage.local.set({ pet_provider_models: models }, () => res({ ok: true }))
+    })
+  )
 }

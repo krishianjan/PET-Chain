@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from memory_store import memory
+from memory_layer import persistent_memory
 from agents import classify_intent_llm, fast_intent_fallback, generate_rewrites, evaluate_response, offline_evaluate
 
 load_dotenv()
@@ -30,7 +31,13 @@ async def rewrite(req: RewriteReq):
 
     state  = memory.get(req.session_id)
     intent = await classify_intent_llm(req.prompt, key) or fast_intent_fallback(req.prompt)
-    data   = await generate_rewrites(req.prompt, intent, key)
+    
+    # Inject persistent preferences
+    domain = intent.get("domain", "general")
+    prefs = persistent_memory.build_context_block(req.session_id, domain)
+    augmented_prompt = f"{prefs}\n{req.prompt}" if prefs else req.prompt
+
+    data   = await generate_rewrites(augmented_prompt, intent, key)
 
     memory.update(req.session_id,
         goal=state.goal or data.get("goal", req.prompt[:80]),
@@ -57,7 +64,11 @@ async def evaluate(req: EvalReq):
 
     # Persist cumulative goal-completion state from this turn
     cum = eval_res.pop("_cumulative", {})
-    new_scores = state.score_history + [eval_res.get("score", 0)]
+    new_score = eval_res.get("score", 0)
+    new_scores = state.score_history + [new_score]
+
+    # Log interaction for RLHF self-improvement
+    persistent_memory.log_interaction(req.session_id, req.question, req.response, new_score)
 
     memory.update(req.session_id,
         score_history=new_scores[-50:],

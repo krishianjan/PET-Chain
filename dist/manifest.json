@@ -17,6 +17,10 @@
     "https://api.deepseek.com/*",
     "https://api.perplexity.ai/*",
     "http://localhost:11434/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.x.ai/*",
+    "https://openrouter.ai/*",
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://claude.ai/*",
@@ -34,7 +38,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.jsx-loader-17a927c6.js"
+        "assets/index.jsx-loader-cecaf986.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -90,8 +94,8 @@
         "https://x.com/*"
       ],
       "resources": [
-        "assets/metrics_store-e323fb81.js",
-        "assets/index.jsx-d3c4a6fa.js"
+        "assets/metrics_store-d440c0d5.js",
+        "assets/index.jsx-5e9a8732.js"
       ],
       "use_dynamic_url": false
     }

@@ -14,9 +14,11 @@ const PETS = [
   { id: 'dog',    emoji: '🐕', label: 'Dog'    },
   { id: 'cat',    emoji: '🐈', label: 'Cat'    },
   { id: 'bird',   emoji: '🦜', label: 'Bird'   },
-  { id: 'rabbit', emoji: '🐇', label: 'Rabbit' },
-  { id: 'human',  emoji: '🧑', label: 'Gopal'  },
+  { id: 'rabbit', emoji: '🐇', label: 'Rabbit', soon: true },
+  { id: 'human',  emoji: '🧑', label: 'Gopal',  soon: true },
 ]
+// Pets not yet ready — locked in picker, fall back to dog if somehow selected
+const COMING_SOON = new Set(PETS.filter(p => p.soon).map(p => p.id))
 const PET_EMOJI = Object.fromEntries(PETS.map(p => [p.id, p.emoji]))
 
 export default function PetWidget() {
@@ -52,7 +54,7 @@ export default function PetWidget() {
     // Mark ready immediately so the pet renders at the default position right away
     setReady(true)
     chrome.storage.local.get(['pet_type','pet_pos','pet_key_groq','pet_key_openai','pet_key_deepseek','pet_ollama_model','pet_name'], r => {
-      const t = r.pet_type || 'dog'
+      const t = (!r.pet_type || COMING_SOON.has(r.pet_type)) ? 'dog' : r.pet_type
       // Clamp stored position to current viewport — prevents off-screen pet
       const p = r.pet_pos ? clampPos(r.pet_pos) : posRef.current
       setPtype(t)
@@ -161,6 +163,7 @@ export default function PetWidget() {
 
   // ── Pet switcher ─────────────────────────────────────────────────────────
   function selectPet(t) {
+    if (COMING_SOON.has(t)) return   // locked — ignore click
     chrome.storage.local.set({ pet_type: t })
     setPtype(t)
     ctrl.current?.setPetType(t)
@@ -228,23 +231,30 @@ export default function PetWidget() {
           pointerEvents: 'auto',
           userSelect: 'none',
         }}>
-          {PETS.map(p => (
-            <div
-              key={p.id}
-              onClick={() => selectPet(p.id)}
-              title={p.label}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                padding: '4px 8px', borderRadius: 8,
-                cursor: 'pointer',
-                background: ptype === p.id ? '#f0f0ff' : 'transparent',
-                border: ptype === p.id ? '1.5px solid #c4b5fd' : '1.5px solid transparent',
-              }}
-            >
-              <span style={{ fontSize: 22 }}>{p.emoji}</span>
-              <span style={{ fontSize: 8, color: '#6b7280', fontFamily: 'system-ui' }}>{p.label}</span>
-            </div>
-          ))}
+          {PETS.map(p => {
+            const locked = COMING_SOON.has(p.id)
+            return (
+              <div
+                key={p.id}
+                onClick={() => selectPet(p.id)}
+                title={locked ? '🔒 Coming Soon' : p.label}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  padding: '4px 8px', borderRadius: 8,
+                  cursor: locked ? 'not-allowed' : 'pointer',
+                  opacity: locked ? 0.45 : 1,
+                  background: !locked && ptype === p.id ? '#f0f0ff' : 'transparent',
+                  border: !locked && ptype === p.id ? '1.5px solid #c4b5fd' : '1.5px solid transparent',
+                  position: 'relative',
+                }}
+              >
+                <span style={{ fontSize: 22 }}>{p.emoji}</span>
+                <span style={{ fontSize: 8, color: locked ? '#9ca3af' : '#6b7280', fontFamily: 'system-ui' }}>
+                  {locked ? 'Soon' : p.label}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
 

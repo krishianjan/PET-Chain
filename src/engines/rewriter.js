@@ -1,6 +1,5 @@
 import { preprocessPrompt } from './preprocessor'
 import { classify, detectUserLevel } from '../classifier/intent'
-
 const TECHNIQUE_LIBRARY = {
   eli5: {
     label: '🎓 Simple Explanation',
@@ -41,6 +40,33 @@ const DOMAIN_MAP = {
   decide: 'strategy', planning: 'productivity',
 }
 
+export function smartRewrite(prompt) {
+  const task = classify(prompt)
+  const domain = DOMAIN_MAP[task] || 'general knowledge'
+
+  // Filter library for matches
+  const relevant = Object.entries(TECHNIQUE_LIBRARY)
+    .filter(([, t]) => t.for && t.for.includes(task))
+
+  // Define fallbacks as [id, object] pairs
+  const fallbacks = [
+    ['cot', { label: '🧠 Expert Analysis', generate: (p) => `You are a world-class ${domain} expert. ${p}\n\nThink step by step.` }],
+    ['struct', { label: '📋 Structured Output', generate: (p) => `${p}\n\nFormat: Direct Answer → Explanation → Examples` }],
+    ['simple', { label: '💬 Plain Language', generate: (p) => `${p}\n\nExplain this simply for a beginner.` }],
+  ]
+
+  // Combine and ensure we have at least 3
+  const combined = [...relevant, ...fallbacks]
+
+  // Take first 3 and transform into the expected UI format
+  return combined.slice(0, 3).map(([id, t]) => ({
+    id,
+    label: t.label || 'Rewrite',
+    prompt: typeof t.generate === 'function' ? t.generate(prompt, domain) : prompt,
+    technique: task,
+  }))
+}
+
 export function buildGroqRewritePrompt(prompt) {
   const task = classify(prompt)
   const level = detectUserLevel(prompt)
@@ -63,12 +89,15 @@ export function parseJSON(raw) {
   }
 }
 
+// Add chain as a technique option based on task
 export function shouldSuggestChain(task) {
   const chainTasks = ['research', 'code_build', 'decide', 'math_explain', 'study']
   return chainTasks.includes(task)
 }
 
+// Rank rewrites — first is always the recommended one
 export function rankRewrites(rewrites, task, userLevel) {
+  // Scoring heuristic: technique match quality for task+level
   const priority = {
     math_explain: ['math_structured', 'eli5', 'cot_expert'],
     code_debug: ['code_debug_xml', 'cot_expert', 'struct'],
@@ -95,22 +124,26 @@ export function rankRewrites(rewrites, task, userLevel) {
   return sorted.map((r, i) => ({ ...r, recommended: i === 0 }))
 }
 
+// Main export — replaces existing smartRewrite
 export function smartRewrite(rawPrompt) {
-  const prompt = preprocessPrompt(rawPrompt)
+  const prompt = preprocessPrompt(rawPrompt)  // fix typos first
   const task = classify(prompt)
   const level = detectUserLevel(prompt)
   const domain = DOMAIN_MAP[task] || 'general knowledge'
 
   const relevant = Object.entries(TECHNIQUE_LIBRARY)
     .filter(([, t]) => t.for.includes(task))
+    .slice(0, 3)
 
   const fallbacks = [
-    ['cot_expert', { label: '🧠 Expert Analysis', generate: (p) => `You are a world-class ${domain} expert.\n${p}\n\nThink step by step. Be specific.` }],
-    ['struct', { label: '📋 Structured Output', generate: (p) => `${p}\n\n**Direct Answer**, **Key Points**, **Examples**, **Next Steps**` }],
-    ['simple', { label: '💬 Plain Language', generate: (p) => `${p}\n\nExplain simply. Use everyday language and real examples.` }],
+    { id: 'cot_expert', label: '🧠 Expert Analysis', generate: (p) => `You are a world-class ${domain} expert.\n${p}\n\nThink step by step. Be specific.` },
+    { id: 'struct', label: '📋 Structured Output', generate: (p) => `${p}\n\n**Direct Answer**, **Key Points**, **Examples**, **Next Steps**` },
+    { id: 'simple', label: '💬 Plain Language', generate: (p) => `${p}\n\nExplain simply. Use everyday language and real examples.` },
   ]
 
-  const techniques = [...relevant, ...fallbacks]
+  const techniques = relevant.length >= 3
+    ? relevant
+    : [...relevant, ...fallbacks.slice(0, 3 - relevant.length)]
 
   const rewrites = techniques.slice(0, 3).map(([id, t]) => ({
     id,

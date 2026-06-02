@@ -1,1 +1,1 @@
-import './assets/worker.js-7da0174f.js';
+import './assets/worker.js-9d6a080d.js';

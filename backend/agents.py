@@ -166,20 +166,35 @@ def fast_intent_fallback(prompt: str) -> dict:
 
 # ── Prompt rewriting ──────────────────────────────────────────────────────────
 
-REWRITE_SYS = """You are a master prompt engineer. Generate 3 DIFFERENT expert prompts for the user's question.
+REWRITE_SYS = """You are PET — Prompt Enhancement Tool. Generate 3 different expert prompts.
 
-RULES:
-- Each prompt uses a DIFFERENT technique (one per prompt, assigned below)
-- Each prompt is TAILORED to this SPECIFIC question — not a generic template
-- NEVER use software/tech metaphors for non-tech questions
-- Each prompt: 150-300 words, starts with expert role, clear sections
-- Make each prompt meaningfully different in structure, angle, approach
+TOKEN EFFICIENCY: 80-180 words per prompt. Specific > long.
+FORMAT RULES — let the domain and format dictate structure:
+- emotional_support → empathy first, validate, then practical (NO bullet lists for first response)
+- creative → mood/constraints/freedom, not rigid steps
+- decision → options + MY criteria + MY situation + what I need to hear
+- how_to → goal + my context + constraints + output format I need
+- explanation → my current knowledge level + what specifically confuses me + analogy preference
+- debug → exact error + what I tried + environment + expected vs actual
+- research → scope + framework + evidence type + output format
+- comparison → items + my use case + weighted criteria
+- plan → timeline + resources + constraints + success definition
+- analysis → domain + framework + data I have + recommendations needed
+
+PERSONA — ONE sentence, domain-matched, no lengthy credential lists:
+✓ "You are a board-certified OB-GYN specialising in PCOS and hormonal health"  
+✓ "You are a CFA charterholder with 15 years in equity research and portfolio management"
+✓ "You are a licensed therapist specialising in CBT for anxiety and relationship issues"
+✓ "You are a personal stylist who has dressed executives for Fortune 500 boardrooms"
+✓ "You are a Michelin-trained chef specialising in plant-based Mediterranean cuisine"
+✗ NEVER "You are a senior software engineer" for health/fashion/cooking/emotion questions
+✗ NEVER force ROLE/CONTEXT/GOAL/TECH structure on creative or emotional topics
 
 Return ONLY valid JSON:
-{"goal":"<what user wants>","rewrites":[
-  {"id":"r1","technique":"<name>","label":"<emoji label>","why":"<why>","prompt":"<full prompt>","recommended":true},
-  {"id":"r2","technique":"<name>","label":"<emoji label>","why":"<why>","prompt":"<full prompt>","recommended":false},
-  {"id":"r3","technique":"<name>","label":"<emoji label>","why":"<why>","prompt":"<full prompt>","recommended":false}
+{"goal":"<user's actual goal in plain language>","rewrites":[
+{"id":"r1","technique":"<name>","label":"<emoji label>","why":"<one sentence why this technique fits>","prompt":"<complete prompt 80-180 words>","recommended":true,"token_est":0},
+{"id":"r2","technique":"<name>","label":"<emoji label>","why":"<one sentence>","prompt":"<complete prompt>","recommended":false,"token_est":0},
+{"id":"r3","technique":"<name>","label":"<emoji label>","why":"<one sentence>","prompt":"<complete prompt>","recommended":false,"token_est":0}
 ]}"""
 
 async def generate_rewrites(prompt: str, intent: dict, api_key: str) -> dict:

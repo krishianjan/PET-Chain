@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { setQ, getQ, rewrite, evaluate, getOllamaModels, setKey as apiSetKey } from '../../engines/api'
 import lottie from 'lottie-web'
 import { recordRewrite, recordScore, recordInject } from '../../engines/metrics_store'
+import { signalPositive, signalNegative, signalCopy } from '../../engines/selfLearner.js'
 import selectorsConfig from '../../../selectors.config.json'
 
 const PERSIST_KEY = 'pet_sidebar_state_v1'
@@ -17,7 +18,9 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const [editTexts,   setEditTexts] = useState({})
   const [editingName, setEditingName] = useState(false)
   const [nameDraft,   setNameDraft]   = useState('')
-  const [rewriteMeta, setRewriteMeta] = useState(null)
+  const [rewriteMeta,    setRewriteMeta]    = useState(null)
+  const [providerConfig, setProviderConfig] = useState(null)
+  const [modelMenuOpen,  setModelMenuOpen]  = useState(false)
 
   const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
   const sizeRef   = useRef({ w: 340, h: 520 })
@@ -32,6 +35,23 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const apiKey    = keys.groq || keys.openai || keys.deepseek
   const hasEngine = !!(keys.ollama_model || apiKey)
 
+  // ── Active provider label for model selector ──────────────────────────────
+  const activeProvider = providerConfig?.activeProvider || null
+  const PROVIDER_ICONS = { gemini:'✨', openai:'🤖', groq:'⚡', claude:'🧠', grok:'𝕏', openrouter:'🌐', deepseek:'🔍', ollama:'🦙' }
+  const activeIcon     = activeProvider ? (PROVIDER_ICONS[activeProvider] || '⚡') : '⚡'
+  const activeModel    = activeProvider ? (providerConfig?.selectedModels?.[activeProvider] || '') : ''
+  const activeLabel    = activeProvider
+    ? `${activeIcon} ${activeProvider}${activeModel ? ` · ${activeModel.split('/').pop()?.split('-').slice(0,3).join('-')}` : ''}`
+    : '⚡ Offline'
+
+  function switchProvider(provider) {
+    chrome.storage.local.set({ pet_active_provider: provider })
+    chrome.runtime.sendMessage({ type: 'GET_PROVIDER_CONFIG' })
+      .then(cfg => { if (cfg?.ok) setProviderConfig(cfg) })
+      .catch(() => {})
+    setModelMenuOpen(false)
+  }
+
   // ── Restore persisted state on mount (survives minimize + page refresh) ───
   useEffect(() => {
     chrome.storage.local.get(PERSIST_KEY, r => {
@@ -41,6 +61,15 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
       if (saved.score)              setScore(saved.score)
       if (saved.originalQ)          originalQ.current = saved.originalQ
     })
+    // Load provider config for the model selector
+    chrome.runtime.sendMessage({ type: 'GET_PROVIDER_CONFIG' })
+      .then(cfg => { if (cfg?.ok) setProviderConfig(cfg) })
+      .catch(() => {})
+
+    // Close model menu on outside click
+    const closeMenu = () => setModelMenuOpen(false)
+    document.addEventListener('click', closeMenu, true)
+    return () => document.removeEventListener('click', closeMenu, true)
   }, [])
 
   // ── Persist rewrites + score whenever they change ─────────────────────────
@@ -418,8 +447,36 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
           </div>
         </div>
 
-        {/* Right: size controls + window actions */}
+        {/* Right: model selector + size controls + window actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          {/* Compact model/provider selector */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setModelMenuOpen(o => !o)}
+              title="Switch AI provider"
+              style={{ fontSize: 8, padding: '2px 6px', background: '#f5f3ff', color: '#534ab7', border: '1px solid #c4b5fd', borderRadius: 4, cursor: 'pointer', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {activeLabel} ▾
+            </button>
+            {modelMenuOpen && providerConfig && (
+              <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 2147483647, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,.15)', minWidth: 160, marginTop: 3 }}>
+                <div style={{ padding: '5px 8px', fontSize: 9, color: '#9ca3af', borderBottom: '1px solid #f3f4f6', fontWeight: 600 }}>SWITCH ENGINE</div>
+                {Object.entries(providerConfig.connectedProviders || {})
+                  .filter(([, connected]) => connected)
+                  .map(([prov]) => (
+                    <button key={prov} onClick={() => switchProvider(prov)}
+                      style={{ width: '100%', textAlign: 'left', padding: '6px 10px', background: providerConfig.activeProvider === prov ? '#f5f3ff' : '#fff', border: 'none', cursor: 'pointer', fontSize: 10, color: '#374151', display: 'flex', alignItems: 'center', gap: 5, borderBottom: '1px solid #f9fafb' }}>
+                      <span>{PROVIDER_ICONS[prov] || '⚡'}</span>
+                      <span style={{ fontWeight: providerConfig.activeProvider === prov ? 700 : 400 }}>{prov}</span>
+                      {providerConfig.activeProvider === prov && <span style={{ marginLeft: 'auto', fontSize: 9, color: '#16a34a' }}>✓</span>}
+                    </button>
+                  ))
+                }
+                {!Object.values(providerConfig.connectedProviders || {}).some(Boolean) && (
+                  <div style={{ padding: '8px 10px', fontSize: 10, color: '#9ca3af' }}>No providers connected</div>
+                )}
+              </div>
+            )}
+          </div>
           {!apiKey && (
             <button onClick={() => setView(v => v === 'setup' ? 'main' : 'setup')}
               style={{ fontSize: 9, padding: '2px 6px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, cursor: 'pointer' }}>
@@ -509,13 +566,18 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
               <div key={r.id} style={{ background: '#fff', border: `1px solid ${r.recommended ? '#c4b5fd' : '#e5e7eb'}`, borderRadius: 12, padding: 10, position: 'relative' }}>
                 {/* Card header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                  <div>
+                  <div style={{ flexWrap: 'wrap', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#534ab7' }}>{r.label}</span>
-                    {r.recommended && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0f0ff', color: '#534ab7', borderRadius: 99, padding: '1px 5px', border: '1px solid #c4b5fd' }}>Recommended</span>}
-                    {r.technique && <span style={{ marginLeft: 5, fontSize: 9, background: '#f0fdf4', color: '#166534', borderRadius: 99, padding: '1px 5px', border: '1px solid #bbf7d0' }}>{r.technique}</span>}
-                    {r.hasContext && <span style={{ marginLeft: 5, fontSize: 9, background: '#eff6ff', color: '#1d4ed8', borderRadius: 99, padding: '1px 5px', border: '1px solid #bfdbfe' }}>🧠 ctx</span>}
+                    {r.recommended && <span style={{ fontSize: 9, background: '#f0f0ff', color: '#534ab7', borderRadius: 99, padding: '1px 5px', border: '1px solid #c4b5fd' }}>Recommended</span>}
+                    {r.technique && <span style={{ fontSize: 9, background: '#f0fdf4', color: '#166534', borderRadius: 99, padding: '1px 5px', border: '1px solid #bbf7d0' }}>{r.technique}</span>}
+                    {r.hasContext && <span style={{ fontSize: 9, background: '#eff6ff', color: '#1d4ed8', borderRadius: 99, padding: '1px 5px', border: '1px solid #bfdbfe' }}>🧠 ctx</span>}
+                    {r.source && r.source !== 'instant' && (
+                      <span style={{ fontSize: 8, background: '#fafafa', color: '#9ca3af', borderRadius: 99, padding: '1px 5px', border: '1px solid #e5e7eb' }}>
+                        {PROVIDER_ICONS[r.source] || '⚡'} {r.source}{r.model ? ` · ${r.model.split('/').pop()?.split('-').slice(0,3).join('-')}` : ''}
+                      </span>
+                    )}
                   </div>
-                  <span style={{ fontSize: 9, color: '#9ca3af' }}>#{idx + 1}</span>
+                  <span style={{ fontSize: 9, color: '#9ca3af', flexShrink: 0 }}>#{idx + 1}</span>
                 </div>
                 {r.why && <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5, fontStyle: 'italic' }}>{r.why}</div>}
 
@@ -548,11 +610,17 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
                   ) : (
                     <>
                       <button
-                        onClick={() => inject(r.prompt)}
+                        onClick={() => {
+                          inject(r.prompt)
+                          try { signalPositive(r, originalQ.current, r.source || activeProvider) } catch {}
+                        }}
                         style={{ flex: 2, padding: '5px 0', background: '#f0f0ff', color: '#534ab7', border: '1px solid #c4b5fd', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
                       >↗ Use</button>
                       <button
-                        onClick={() => handleRewriteCard(r.prompt)}
+                        onClick={() => {
+                          handleRewriteCard(r.prompt)
+                          try { signalNegative(r, originalQ.current, r.source || activeProvider) } catch {}
+                        }}
                         title="Generate new variations of this prompt"
                         disabled={loading}
                         style={{ flex: 1, padding: '5px 0', background: loading ? '#f3f4f6' : '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 6, cursor: loading ? 'wait' : 'pointer', fontSize: 10, fontWeight: 600 }}
@@ -563,7 +631,10 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
                         style={{ padding: '5px 7px', background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer', fontSize: 10 }}
                       >✏</button>
                       <button
-                        onClick={() => copyToClipboard(r.id, r.prompt)}
+                        onClick={() => {
+                          copyToClipboard(r.id, r.prompt)
+                          try { signalCopy(r, originalQ.current, r.source || activeProvider) } catch {}
+                        }}
                         title="Copy to clipboard"
                         style={{ padding: '5px 8px', background: copied === r.id ? '#f0fdf4' : '#f9fafb', color: copied === r.id ? '#16a34a' : '#6b7280', border: `1px solid ${copied === r.id ? '#bbf7d0' : '#e5e7eb'}`, borderRadius: 6, cursor: 'pointer', fontSize: 10 }}
                       >{copied === r.id ? '✓' : '⎘'}</button>
