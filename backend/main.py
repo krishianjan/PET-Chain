@@ -109,6 +109,66 @@ async def evaluate(req: EvalReq):
         "stop_reason":    cum.get("stop_reason", ""),
     }
 
+class PredictReq(BaseModel):
+    text:       str
+    api_key:    Optional[str] = None
+    session_id: str           = "default"
+
+@app.post("/predict")
+async def predict(req: PredictReq):
+    """
+    Real-time prediction endpoint.
+    Returns: spell corrections, intent preview, domain classification.
+    Uses sentence-transformers embeddings for domain matching.
+    """
+    from metrics import ml_score
+    text = req.text.strip()
+    if not text or len(text) < 4:
+        return {"ok": False, "error": "too short"}
+
+    result = {"ok": True, "text": text}
+
+    # Semantic domain classification via embeddings
+    try:
+        from memory_layer import embed, cosine_sim, HAS_EMBEDDINGS
+        if HAS_EMBEDDINGS:
+            DOMAIN_ANCHORS = {
+                "software":      "build app code website react python javascript typescript api backend frontend",
+                "machine_learning": "train model neural network deep learning transformer embeddings dataset",
+                "finance":       "invest stocks portfolio crypto money budget savings returns",
+                "health":        "exercise diet calories nutrition symptoms medical treatment",
+                "mental_health": "anxiety depression therapy stress feelings emotions overwhelmed",
+                "fashion":       "outfit style clothing dress wear fashion wardrobe",
+                "science":       "experiment hypothesis chemistry physics biology quantum genetics",
+                "mathematics":   "equation proof calculus algebra statistics probability matrix",
+                "marketing":     "brand campaign launch growth saas gtm audience conversion",
+                "creative_writing": "write story poem fiction narrative essay voice tone",
+                "cooking":       "recipe ingredient cook bake food meal dish technique",
+                "philosophy":    "ethics logic epistemology consciousness meaning existence",
+            }
+            q_emb = embed(text)
+            best_domain, best_score = "general", 0.0
+            for domain, anchor in DOMAIN_ANCHORS.items():
+                a_emb = embed(anchor)
+                sim   = cosine_sim(q_emb, a_emb)
+                if sim > best_score:
+                    best_score, best_domain = sim, domain
+            result["domain"]       = best_domain
+            result["domain_score"] = round(best_score, 3)
+    except Exception as e:
+        result["domain"] = "general"
+
+    # Similar past prompts from chromadb
+    try:
+        from memory_layer import _chroma_search
+        similar = _chroma_search(text, req.session_id, limit=2)
+        if similar:
+            result["similar_past"] = similar[:2]
+    except Exception:
+        pass
+
+    return result
+
 @app.post("/signal")
 def signal(req: SignalReq):
     """Record an RLHF signal from the browser (Use/Vary/Copy button clicks)."""

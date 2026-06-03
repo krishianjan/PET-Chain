@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { setQ, getQ, rewrite, evaluate, getOllamaModels, setKey as apiSetKey } from '../../engines/api'
 import lottie from 'lottie-web'
 import { recordRewrite, recordScore, recordInject } from '../../engines/metrics_store'
 import { signalPositive, signalNegative, signalCopy } from '../../engines/selfLearner.js'
+import { debouncedPredict, debouncedIntent, debouncedSpell, resetPredictions } from '../../engines/predictor.js'
 import selectorsConfig from '../../../selectors.config.json'
 
 const PERSIST_KEY = 'pet_sidebar_state_v1'
@@ -21,6 +22,13 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
   const [rewriteMeta,    setRewriteMeta]    = useState(null)
   const [providerConfig, setProviderConfig] = useState(null)
   const [modelMenuOpen,  setModelMenuOpen]  = useState(false)
+
+  // ── Real-time prediction state ─────────────────────────────────────────
+  const [prediction,    setPrediction]   = useState(null)   // ghost text suggestion
+  const [intentPreview, setIntentPreview]= useState(null)   // "Detected: Building emotion web app..."
+  const [spellSuggest,  setSpellSuggest] = useState(null)   // { corrected, changes }
+  const [liveText,      setLiveText]     = useState('')      // mirrors the textarea in real-time
+  const predAccepted = useRef(false)
 
   const posRef    = useRef({ x: window.innerWidth - 366, y: 60 })
   const sizeRef   = useRef({ w: 340, h: 520 })
@@ -71,6 +79,73 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     document.addEventListener('click', closeMenu, true)
     return () => document.removeEventListener('click', closeMenu, true)
   }, [])
+
+  // ── Live textarea observer -- drives all real-time predictions ────────────
+  useEffect(() => {
+    const sel = selectorsConfig.platforms[platform]?.textarea
+    if (!sel) return
+
+    let interval = null
+    let lastText  = ''
+
+    const tick = () => {
+      const el = document.querySelector(sel)
+      if (!el) return
+      const text = (el.value || el.textContent || el.innerText || '').trim()
+      if (text === lastText || text.length < 6) return
+      lastText = text
+      setLiveText(text)
+      predAccepted.current = false
+
+      // Get active provider + key for predictions
+      chrome.storage.local.get(['pet_active_provider', 'pet_key_gemini', 'pet_key_openai', 'pet_key_groq', 'pet_key_claude', 'pet_key_deepseek'], r => {
+        const prov   = r.pet_active_provider || 'groq'
+        const keyMap = { gemini: r.pet_key_gemini, openai: r.pet_key_openai, groq: r.pet_key_groq, claude: r.pet_key_claude, deepseek: r.pet_key_deepseek }
+        const apiKey = keyMap[prov]
+        if (!apiKey) return
+
+        // Next-word prediction (ghost text)
+        debouncedPredict(text, prov, apiKey, p => {
+          if (!predAccepted.current) setPrediction(p)
+        })
+        // Intent preview badge
+        debouncedIntent(text, prov, apiKey, i => setIntentPreview(i))
+        // Spell check
+        debouncedSpell(text, prov, apiKey, s => setSpellSuggest(s))
+      })
+    }
+
+    interval = setInterval(tick, 300)
+    return () => clearInterval(interval)
+  }, [platform])
+
+  // Accept prediction on Tab key in the textarea
+  useEffect(() => {
+    if (!prediction) return
+    const sel = selectorsConfig.platforms[platform]?.textarea
+    const handleKey = e => {
+      if (e.key === 'Tab' && prediction && liveText) {
+        e.preventDefault()
+        const el = document.querySelector(sel)
+        if (!el) return
+        const full = liveText + ' ' + prediction
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+          setter?.call(el, full)
+          el.dispatchEvent(new Event('input', { bubbles: true }))
+        } else {
+          el.focus()
+          document.execCommand('selectAll', false, null)
+          document.execCommand('insertText', false, full)
+        }
+        predAccepted.current = true
+        setPrediction(null)
+        setLiveText(full)
+      }
+    }
+    document.addEventListener('keydown', handleKey, true)
+    return () => document.removeEventListener('keydown', handleKey, true)
+  }, [prediction, liveText, platform])
 
   // ── Persist rewrites + score whenever they change ─────────────────────────
   useEffect(() => {
@@ -257,8 +332,11 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     setRewrites([])
     setScore(null)
     setEditing(null)
+    setPrediction(null)
+    setSpellSuggest(null)
+    resetPredictions()
     petCtrl?.setState('thinking')
-    setStatus('Crafting prompts…')
+    setStatus('Analysing intent…')
 
     let result = null
     try { result = await rewrite(raw, apiKey) } catch (e) { console.error('[PET rewrite]', e) }
@@ -513,6 +591,74 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
         <SetupView keys={keys} setKeys={setKeys} setView={setView} setStatus={setStatus} />
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+          {/* ── Real-time prediction panel ── */}
+          {(intentPreview || prediction || spellSuggest) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+
+              {/* Intent preview badge */}
+              {intentPreview && (
+                <div style={{ background: '#f0f4ff', border: '1px solid #c7d4fd', borderRadius: 7, padding: '4px 9px', fontSize: 10, color: '#3b4dc8', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 11 }}>🎯</span>
+                  <span style={{ fontWeight: 600 }}>Detected:</span>
+                  <span>{intentPreview}</span>
+                </div>
+              )}
+
+              {/* Next-word prediction ghost text */}
+              {prediction && (
+                <div style={{ background: '#fafaf8', border: '1px dashed #d1d5db', borderRadius: 7, padding: '5px 9px', fontSize: 10, color: '#6b7280', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 10 }}>✨</span>
+                    <span style={{ fontStyle: 'italic', color: '#9ca3af' }}>{liveText.slice(-30)}</span>
+                    <span style={{ color: '#534ab7', fontWeight: 600 }}> {prediction}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const sel = selectorsConfig.platforms[platform]?.textarea
+                      const el  = document.querySelector(sel)
+                      if (el) {
+                        const full = liveText + ' ' + prediction
+                        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+                        setter?.call(el, full)
+                        el.dispatchEvent(new Event('input', { bubbles: true }))
+                        predAccepted.current = true
+                        setPrediction(null)
+                        setLiveText(full)
+                      }
+                    }}
+                    style={{ fontSize: 9, padding: '2px 7px', background: '#f0f0ff', color: '#534ab7', border: '1px solid #c4b5fd', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Tab ↵ accept
+                  </button>
+                </div>
+              )}
+
+              {/* Spell correction suggestion */}
+              {spellSuggest?.changes?.length > 0 && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '4px 9px', fontSize: 10, color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>✏️</span>
+                    <span>Fix: {spellSuggest.changes.slice(0, 2).map(c => `"${c.original}" → "${c.fixed}"`).join(', ')}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const sel = selectorsConfig.platforms[platform]?.textarea
+                      const el  = document.querySelector(sel)
+                      if (el && spellSuggest.corrected) {
+                        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+                        setter?.call(el, spellSuggest.corrected)
+                        el.dispatchEvent(new Event('input', { bubbles: true }))
+                        setSpellSuggest(null)
+                        setLiveText(spellSuggest.corrected)
+                      }
+                    }}
+                    style={{ fontSize: 9, padding: '2px 7px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    Apply fix
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', gap: 8 }}>
