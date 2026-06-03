@@ -148,47 +148,47 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     return 'general'
   }
 
-  // ── Dynamic follow-up builder — uses actual gaps + question, not templates ──
-  function buildFollowUp(domain, gaps, score, originalQ = '') {
+  // ── Dynamic follow-up builder -- references actual response content ──────────
+  function buildFollowUp(domain, gaps, score, originalQ = '', responseText = '') {
     const g = gaps.filter(Boolean).slice(0, 3)
     const hasGaps = g.length > 0
-    const qSnippet = originalQ ? originalQ.slice(0, 100) : ''
 
-    // Format gap list naturally
-    const gapList = g.length === 0 ? ''
-      : g.length === 1 ? `"${g[0]}"`
-      : g.length === 2 ? `"${g[0]}" and "${g[1]}"`
-      : `"${g[0]}", "${g[1]}", and "${g[2]}"`
+    // Extract concrete specifics FROM the actual response to cite in follow-up
+    const techNames   = (responseText.match(/\b(React|Vue|Next\.js|Angular|Svelte|Tailwind|Node|Express|FastAPI|Django|Rails|Laravel|Postgres|MongoDB|Redis|TypeScript|JavaScript|Python|Go|Rust|Docker|Kubernetes|AWS|Vercel|Netlify|Firebase|Supabase|Stripe|GraphQL|REST|OAuth|JWT|Webpack|Vite|Prisma)\b/g) || [])
+    const frameworks  = [...new Set(techNames)].slice(0, 3)
+    const hasCode     = /```[\s\S]*?```/.test(responseText)
+    const hasNumbers  = responseText.match(/\b\d+(?:\.\d+)?(?:\s*%|\s*ms|\s*KB|\s*MB|\s*GB)?\b/g) || []
+    const firstNumber = hasNumbers[0] || ''
+
+    // Grab a key phrase the response actually used (for quoting in follow-up)
+    const firstConcept = frameworks[0] || g[0] || 'the approach you described'
+    const stackStr     = frameworks.length ? frameworks.join(' + ') : ''
 
     if (score >= 82) {
-      // Strong response — push for depth and real specifics
-      if (hasGaps) {
-        return `The main points are covered. Now go deeper: "You mentioned ${gapList} but didn't fully explore ${g.length > 1 ? 'them' : 'it'}. For each: give a concrete real-world example with specific numbers or working code, show the edge case where it fails or behaves unexpectedly, and explain how an expert handles that edge case differently from a beginner."`
+      if (stackStr && !hasCode) {
+        return `You recommended ${stackStr} -- now show it working. "Give me the complete implementation: exact file structure, the full content of the most critical file (no truncation), and the commands to run it from scratch. What breaks most often when people set up ${firstConcept} for the first time -- and how do you prevent it?"`
       }
-      return `Good answer. Make it concrete: "Take what you just explained and apply it to a real scenario with actual names, numbers, and measurable outcomes. Show the single thing that separates an expert's approach from a technically correct but average answer."`
-    }
-
-    if (score >= 60 && hasGaps) {
-      // Medium quality with specific gaps — request targeted fill
-      const intro = qSnippet
-        ? `Your response to "${qSnippet}${qSnippet.length >= 100 ? '…' : ''}" skipped`
-        : 'Your response skipped'
-      return `The answer left gaps. Follow up: "${intro} ${gapList}. For ${g.length > 1 ? 'each one' : 'it'}: what exactly is it?, how does it apply in this specific context?, and give a concrete example with real details — actual numbers, working code, or a named real-world case. Don't give a general overview."`
+      if (hasCode) {
+        return `Good code shown. Push to production-ready. "The snippet you provided works for the happy path. Now harden it: add proper error handling for the 3 most common failure modes, show how to test it with a real input, and what environment variables or config are needed. Also -- what would you change if this needed to handle 10x more load?"`
+      }
+      return `Strong answer. Make it actionable. "Take the approach you described and apply it end-to-end on a real minimal example -- actual file names, real commands from blank terminal to working output. Where do most people get stuck at this stage, and what's the exact fix?"`
     }
 
     if (score >= 60) {
-      // Medium quality, no clear gaps — ask for specifics
-      return `The answer needs more depth. Ask: "Can you be more concrete? Pick the most important concept from your answer and show it in action — use a real example with specific numbers or code, walk through the mechanism step by step, and show what would go wrong if someone applied this incorrectly."`
+      if (stackStr) {
+        return `You mentioned ${stackStr} but stayed abstract. "Show the concrete implementation: the exact folder structure, the key config file written out in full, and the working code snippet for the hardest part (${firstConcept}). Skip the explanation -- just working code with one-line comments for non-obvious parts. What's the gotcha that trips people up in this stack?"`
+      }
+      if (hasGaps) {
+        return `The answer left out ${g.slice(0, 2).map(w => `"${w}"`).join(' and ')}. "Your response skipped ${g[0]}. I need: (1) a precise definition of ${g[0]} in this specific context, (2) a working example with real values -- no placeholders, and (3) how it connects to ${g[1] || 'the rest of what you covered'}. Be specific, not general."`
+      }
+      return `Needs more depth. "Pick the single most complex part of what you explained and implement it completely -- real code, actual values, zero placeholder text. Then show what would break if someone skipped this step and how to diagnose it."`
     }
 
+    // Low score
     if (hasGaps) {
-      // Low score with known gaps — request focused redo
-      const context = qSnippet ? ` in the context of "${qSnippet}${qSnippet.length >= 100 ? '…' : ''}"` : ''
-      return `The response was incomplete. Ask: "Your answer missed ${gapList}${context}. Please address the question again — specifically: define ${g[0]} precisely, show how it applies with a concrete example using real numbers or working code, and explain the step-by-step mechanism. Avoid general statements."`
+      return `Response missed key parts. "Please answer again focusing on: ${g[0]}${g[1] ? ` and ${g[1]}` : ''}. Give me the exact implementation steps with real commands, a working code snippet for the core logic, and the specific error that trips people up most. No background theory -- I need the implementation."`
     }
-
-    // Low score, no clear keywords missed — ask for a complete redo
-    return `The response was too vague. Ask: "Please answer again with more precision. Instead of general statements, give me: (1) a specific real-world example with actual numbers or working code, (2) the step-by-step mechanism showing how it works, and (3) the one thing that would make your answer immediately actionable for someone starting right now."`
+    return `Too generic. "Please be specific: (1) recommend the exact tech stack for this use case with reasons over alternatives, (2) show the working code for the hardest part -- no pseudocode, (3) give complete setup commands from scratch, and (4) what fails first when people try this and how to prevent it."`
   }
 
   // ── Smart local scorer ────────────────────────────────────────────────────
@@ -244,7 +244,7 @@ export default function Sidebar({ onClose, onMinimize, petCtrl, platform, petTyp
     if (covered.length === 0) covered.push('Response was provided')
     const missing = missWords.map(w => `"${w}" needs more depth`)
 
-    const next_prompt = buildFollowUp(domain, missWords, sc, originalQuestion)
+    const next_prompt = buildFollowUp(domain, missWords, sc, originalQuestion, responseText)
 
     return { score: sc, grade, grade_label, covered, missing, next_prompt }
   }

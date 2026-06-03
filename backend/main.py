@@ -23,6 +23,20 @@ class EvalReq(BaseModel):
     api_key:    Optional[str] = None
     session_id: str           = "default"
 
+class SignalReq(BaseModel):
+    user_id:        str
+    technique:      str
+    domain:         str           = "general"
+    provider:       str           = "unknown"
+    signal:         str           = "positive"   # positive | negative | copy
+    weight:         float         = 1.0
+    prompt_snippet: Optional[str] = ""
+
+class MemoryReq(BaseModel):
+    user_id: str
+    content: str
+    metadata: Optional[dict] = None
+
 @app.post("/rewrite")
 async def rewrite(req: RewriteReq):
     if not req.prompt: raise HTTPException(400, "Prompt required")
@@ -95,9 +109,41 @@ async def evaluate(req: EvalReq):
         "stop_reason":    cum.get("stop_reason", ""),
     }
 
+@app.post("/signal")
+def signal(req: SignalReq):
+    """Record an RLHF signal from the browser (Use/Vary/Copy button clicks)."""
+    persistent_memory.record_signal(
+        req.user_id, req.technique, req.domain,
+        req.provider, req.signal, req.weight, req.prompt_snippet or ''
+    )
+    return {"ok": True}
+
+@app.post("/memory/add")
+def memory_add(req: MemoryReq):
+    """Explicitly add a memory fact."""
+    persistent_memory.remember(req.user_id, req.content, req.metadata)
+    return {"ok": True}
+
+@app.get("/memory/recall")
+def memory_recall(user_id: str, query: str, limit: int = 5):
+    """Retrieve semantically relevant memories for a user."""
+    results = persistent_memory.recall(user_id, query, limit)
+    return {"ok": True, "memories": results}
+
+@app.get("/memory/stats/{user_id}")
+def memory_stats(user_id: str):
+    """Memory layer stats for dashboard."""
+    return {"ok": True, **persistent_memory.get_stats(user_id)}
+
 @app.get("/health")
 def health():
-    return {"ok": True, "groq": bool(os.getenv("GROQ_API_KEY")), "sessions": len(memory._store)}
+    return {
+        "ok": True,
+        "groq": bool(os.getenv("GROQ_API_KEY")),
+        "sessions": len(memory._store),
+        "mem0": True,  # persistent_memory knows
+        "version": "3.0"
+    }
 
 # ── Install / event tracking ──────────────────────────────────────────────────
 TRACK_FILE = os.path.join(os.path.dirname(__file__), 'installs.json')

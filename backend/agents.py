@@ -5,7 +5,28 @@ from langchain_core.messages import SystemMessage, HumanMessage
 FAST_MODEL  = "llama-3-8b-8192"
 SMART_MODEL = "llama-3.3-70b-versatile"
 
-def get_llm(api_key: str, temperature: float = 0.7, max_tokens: int = 4000, fast: bool = False):
+# Domain-aware temperature (mirrors llmRouter.js TEMPERATURE_MAP)
+DOMAIN_TEMPERATURE = {
+    'software': 0.30, 'web_dev': 0.30, 'frontend': 0.28, 'backend': 0.25,
+    'databases': 0.22, 'cybersecurity': 0.20, 'machine_learning': 0.30, 'ai': 0.32,
+    'mathematics': 0.15, 'chemistry': 0.20, 'physics': 0.20, 'biology': 0.25,
+    'finance': 0.32, 'economics': 0.35, 'law': 0.25, 'medicine': 0.28,
+    'education': 0.55, 'health': 0.42, 'nutrition': 0.45,
+    'mental_health': 0.72, 'relationships': 0.75, 'emotional_support': 0.78,
+    'creative_writing': 0.92, 'fiction': 0.93, 'poetry': 0.95,
+    'fashion': 0.85, 'music': 0.88, 'visual_arts': 0.90,
+    'marketing': 0.62, 'copywriting': 0.68, 'brainstorm': 0.92,
+}
+
+def get_domain_temperature(domain: str) -> float:
+    if not domain: return 0.65
+    key = domain.lower().replace('-', '_').replace(' ', '_')
+    if key in DOMAIN_TEMPERATURE: return DOMAIN_TEMPERATURE[key]
+    for k, v in DOMAIN_TEMPERATURE.items():
+        if key in k or k in key: return v
+    return 0.65
+
+def get_llm(api_key: str, temperature: float = 0.65, max_tokens: int = 4000, fast: bool = False):
     return ChatGroq(
         api_key=api_key or os.getenv("GROQ_API_KEY"),
         model_name=FAST_MODEL if fast else SMART_MODEL,
@@ -65,10 +86,10 @@ Creative/Marketing: Scene-Based Breakdown, Hook-Problem-Solution-CTA, AIDA Frame
 
 async def classify_intent_llm(prompt: str, api_key: str) -> dict:
     try:
-        llm = get_llm(api_key, temperature=0.3, max_tokens=600, fast=True)
+        llm = get_llm(api_key, temperature=0.3, max_tokens=700, fast=True)
         resp = await llm.ainvoke([
             SystemMessage(content=CLASSIFY_SYS),
-            HumanMessage(content=f'Classify this question: "{prompt}"')
+            HumanMessage(content=f'Classify and expand this request: "{prompt}"')
         ])
         return safe_json(resp.content)
     except Exception as e:
@@ -215,7 +236,9 @@ async def generate_rewrites(prompt: str, intent: dict, api_key: str) -> dict:
     )
 
     try:
-        llm = get_llm(api_key, temperature=0.8)
+        # Use domain-aware temperature for better prompt quality
+        temp = get_domain_temperature(domain)
+        llm  = get_llm(api_key, temperature=temp)
         resp = await llm.ainvoke([SystemMessage(content=REWRITE_SYS), HumanMessage(content=user_msg)])
         data = safe_json(resp.content)
         rewrites = data.get("rewrites", [])

@@ -7,3 +7,9 @@ node_modules/
 backend/__pycache__/
 *.pyc
 .claude/
+
+# Runtime memory data (auto-generated, never commit)
+backend/pet_memory.db
+backend/pet_memory/chroma/
+backend/pet_memory/graph.json
+backend/installs.json

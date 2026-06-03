@@ -57,429 +57,128 @@ const RAG_STORE = {
   },
 }
 
-// ── Dynamic Prompt Builder (RAG-powered, intent-aware) ────────────────────
+// ── Offline Prompt Generator (no API key -- last resort fallback) ─────────
+// Zero hardcoded templates. Generates structured expert prompts for ANY domain.
+// The output prompts instruct the LLM to give complete, specific answers.
 const DPB = {
 
-  // Strip any existing PET wrapper — prevents Task:"Task:"..." double-nesting
+  // Strip any existing PET wrapper to prevent double-nesting
   stripWrapper(raw) {
     const t = raw.trim()
-    if (t.length < 80) return raw  // too short to contain a wrapper
-
-    // Strategy 1 — look for the FIRST "Label: "user content"" within the first 600 chars.
-    // This catches ALL PET templates:
-    //   Task:, Project goal:, Topic to explain:, Guide me through:,
-    //   Issue to diagnose:, Compare:, My task:, Question:, Problem:, etc.
+    if (t.length < 80) return raw
     const head = t.slice(0, 700)
-    // Match a line-start label (capitalised word(s)) followed by : "content"
     const m = head.match(/(?:^|\n)[A-Z3][A-Za-z ,\-]*?:\s*"([^"]{10,400})"/m)
     if (m?.[1]) {
       const ex = m[1].trim()
-      // Only accept if the extracted content is much shorter than the full wrapped prompt
       if (ex.length >= 10 && ex.length < t.length * 0.65) return ex
     }
-
-    // Strategy 2 — persona-less openers like "3-expert panel on: "..." / "Help me decide: "...""
     const m2 = t.match(/^(?:3-expert panel on|Help me decide|Socratic guide for|Apply .{3,50} to):\s*"([^"]{10,400})"(?:\s*\n|$)/im)
     if (m2?.[1] && m2[1].length < t.length * 0.65) return m2[1].trim()
-
     return raw
   },
 
-  detectDomain(p) {
+  // Minimal domain inference -- used only to pick the right expert persona
+  inferDomain(p) {
     const t = p.toLowerCase()
-    const rules = [
-      // Software/web — expanded to catch fullstack, website, hosting, vibe coding
-      [/\b(react|vue|angular|nextjs|python|javascript|typescript|rust|golang|java|kotlin|swift|sql|api|backend|frontend|docker|kubernetes|git|npm|webpack|vite|node|fullstack|full.?stack|website|web.?app|webapp|deploy|hosting|vercel|netlify|aws|heroku|railway|supabase|firebase|prisma|express|fastapi|django|flask|vibe.?cod|vibecod)\b/, 'software'],
-      [/\b(machine learning|neural|deep learning|llm|gpt|model|dataset|training|inference|embedding|vector|rag|fine.?tun|transformer|bert|diffusion)\b/, 'ai_ml'],
-      [/\b(stock|invest|portfolio|crypto|bitcoin|etf|roi|dividend|equity|fund|forex|recession|inflation|budget|saving|p\/e|cagr|compound)\b/, 'finance'],
-      [/\b(chemistry|biology|physics|quantum|genetics|evolution|organism|molecule|atom|reaction|experiment|hypothesis|ecology)\b/, 'science'],
-      [/\b(calculus|derivative|integral|matrix|algebra|geometry|probability|statistics|theorem|proof|linear algebra|differential)\b/, 'mathematics'],
-      [/\b(health|fitness|diet|exercise|medical|symptom|treatment|nutrition|sleep|therapy|mental health|supplement|medication)\b/, 'health'],
-      [/\b(marketing|brand|launch|campaign|gtm|growth|saas|startup|pitch|positioning|audience|content strategy|product market)\b/, 'business'],
-      [/\b(write|essay|blog|email|letter|story|poem|caption|newsletter|script|copy|draft|article|proposal|cover letter)\b/, 'writing'],
-      [/\b(recipe|cook|bake|ingredient|meal|food|dish|cuisine|kitchen)\b/, 'cooking'],
-      [/\b(law|legal|contract|regulation|compliance|rights|court|clause|statute)\b/, 'legal'],
-    ]
-    for (const [re, d] of rules) if (re.test(t)) return d
-    return 'general'
+    if (/\b(code|build|app|website|api|react|python|javascript|typescript|nextjs|backend|frontend|deploy|database|docker|kubernetes|aws|vercel|supabase|firebase|function|algorithm|debug|bug|error|stack|github|npm|node|express|django|fastapi|sql|mongodb|redis|graphql|rest|microservice|devops|git|cloud|serverless|auth|oauth|jwt)\b/.test(t)) return { domain: 'software_engineering', persona: 'Senior full-stack engineer with 12 years building production systems', temperature: 0.30 }
+    if (/\b(machine learning|neural|deep learning|llm|gpt|model|dataset|training|inference|embedding|vector|rag|fine.?tun|transformer|bert|diffusion|mediapipe|computer vision|nlp|pytorch|tensorflow|scikit|hugging)\b/.test(t)) return { domain: 'ai_ml_engineering', persona: 'ML engineer and AI researcher with expertise in production model deployment', temperature: 0.32 }
+    if (/\b(stock|invest|portfolio|crypto|bitcoin|etf|roi|dividend|equity|fund|forex|recession|inflation|budget|saving|p\/e|cagr|compound|option|bond|valuation|revenue|profit|margin|startup|venture|ipo|hedge)\b/.test(t)) return { domain: 'finance_investing', persona: 'CFA charterholder and portfolio manager with 15 years in equity research', temperature: 0.30 }
+    if (/\b(fashion|outfit|style|wardrobe|clothing|dress|wear|fabric|designer|brand|trend|capsule|aesthetic|color palette|streetwear|luxury|sustainable fashion|accessory|shoe|bag|jewelry)\b/.test(t)) return { domain: 'fashion_styling', persona: 'Personal stylist who has dressed executives and creatives for major life events', temperature: 0.82 }
+    if (/\b(period|pcos|hormone|menstrual|fertility|pregnancy|ovulation|estrogen|progesterone|women.?s health|reproductive|endometriosis|menopause|breastfeed|postpartum)\b/.test(t)) return { domain: 'womens_health', persona: "Board-certified OB-GYN specialising in hormonal health and reproductive medicine", temperature: 0.38 }
+    if (/\b(anxious|anxiety|depress|therapy|mental health|therapist|counsell|trauma|ptsd|burnout|stress|grief|loneliness|self.?esteem|relationship|breakup|divorce|emotional|feelings|overwhelm)\b/.test(t)) return { domain: 'mental_health', persona: 'Licensed clinical psychologist specialising in CBT and trauma-informed care', temperature: 0.72 }
+    if (/\b(diet|nutrition|calories|protein|carb|fat|macro|keto|vegan|intermittent fasting|weight loss|muscle|supplement|meal prep|gut health|inflammation|blood sugar|microbiome)\b/.test(t)) return { domain: 'nutrition_health', persona: 'Registered dietitian and sports nutritionist with clinical and performance experience', temperature: 0.42 }
+    if (/\b(chemistry|biology|physics|quantum|genetics|evolution|organism|molecule|atom|reaction|experiment|hypothesis|ecology|neuroscience|anatomy|cell|protein|dna|rna|thermodynamics|astronomy|geology|climate|element|isotope|enzyme)\b/.test(t)) return { domain: 'life_physical_sciences', persona: 'Research scientist with PhD and 15 years laboratory and academic experience', temperature: 0.25 }
+    if (/\b(calculus|derivative|integral|matrix|algebra|geometry|probability|statistics|theorem|proof|linear algebra|differential|topology|discrete math|set theory|fourier|laplace)\b/.test(t)) return { domain: 'mathematics', persona: 'Mathematics professor who makes every reasoning step visible and builds intuition first', temperature: 0.18 }
+    if (/\b(marketing|brand|launch|campaign|gtm|growth|saas|startup|pitch|positioning|audience|content strategy|product market|seo|copywriting|advertising|go.?to.?market|funnel|conversion|retention|churn)\b/.test(t)) return { domain: 'growth_marketing', persona: 'Growth marketing director who has launched 20+ B2B and consumer products from zero to scale', temperature: 0.55 }
+    if (/\b(write|essay|blog|email|letter|story|poem|caption|newsletter|script|copy|draft|article|proposal|cover letter|fiction|screenplay|creative writing|narrative|voice|tone|headline)\b/.test(t)) return { domain: 'writing_content', persona: 'Senior editor and content strategist with 15 years at top-tier publications', temperature: 0.75 }
+    if (/\b(recipe|cook|bake|ingredient|meal|food|dish|cuisine|kitchen|knife|technique|ferment|sourdough|pasta|sauce|barbeque|spice|flavor|umami)\b/.test(t)) return { domain: 'culinary', persona: 'Michelin-trained chef specialising in technique-driven cooking and flavour science', temperature: 0.72 }
+    if (/\b(law|legal|contract|regulation|compliance|rights|court|clause|statute|ip|trademark|copyright|employment law|terms of service|liability|gdpr)\b/.test(t)) return { domain: 'legal', persona: 'Experienced attorney (informational only -- not legal advice for your specific situation)', temperature: 0.22 }
+    if (/\b(philosophy|ethics|logic|epistemology|metaphysics|consciousness|free will|existential|stoic|nietzsche|kant|plato|aristotle|moral|virtue|utilitarianism|phenomenology)\b/.test(t)) return { domain: 'philosophy', persona: 'Philosophy professor specialising in ethics, epistemology, and critical reasoning', temperature: 0.65 }
+    if (/\b(history|geopolitics|war|empire|revolution|civilization|colonial|trade route|treaty|dynasty|cold war|world war|economy history|cultural history)\b/.test(t)) return { domain: 'history_geopolitics', persona: 'Historian and geopolitical analyst with expertise in global patterns and primary sources', temperature: 0.45 }
+    if (/\b(skincare|haircare|makeup|beauty|grooming|routine|serum|moisturizer|sunscreen|retinol|vitamin c|acne|skin type|pore|hyperpigmentation|collagen)\b/.test(t)) return { domain: 'beauty_skincare', persona: 'Dermatologist-trained aesthetician and beauty expert with clinical and formulation knowledge', temperature: 0.68 }
+    if (/\b(travel|trip|itinerary|destination|visa|hotel|flight|budget travel|backpack|culture|language|local food|tourist|hidden gem|travel hack)\b/.test(t)) return { domain: 'travel', persona: 'Seasoned travel writer and trip planner who has visited 80+ countries with deep local knowledge', temperature: 0.72 }
+    return { domain: 'general', persona: 'World-class expert with deep domain knowledge and practical experience', temperature: 0.65 }
   },
 
-  detectOutputType(p) {
-    const t = p.toLowerCase()
-    // roadmap/guide/steps checked FIRST — wins over 'build' keyword so
-    // "help me build... I need a roadmap" → steps, not build
-    if (/\b(roadmap|step[- ]by[- ]step|how to|tutorial|guide|walkthrough|where (do i |should i |to )?start|what (do i |should i )?need|complete guide|from scratch|from zero|getting started)\b/.test(t)) return 'steps'
-    if (/\b(plan|strategy|schedule|organize)\b/.test(t)) return 'plan'
-    if (/\b(compare|vs|versus|difference|pros.?cons|better|which is)\b/.test(t)) return 'comparison'
-    if (/\b(fix|debug|error|bug|broken|not working|fails|crash)\b/.test(t)) return 'debug'
-    if (/\b(build|implement|develop|code|script|app|api|create a|make a)\b/.test(t)) return 'build'
-    if (/\b(explain|what is|how does|understand|why does|what are)\b/.test(t)) return 'explain'
-    if (/\b(analyze|review|evaluate|assess|critique|audit)\b/.test(t)) return 'analysis'
-    if (/\b(calculate|solve|compute|find|equation|simplify|factor)\b/.test(t)) return 'solve'
-    if (/\b(should i|recommend|best|pick|choose|worth it|which one)\b/.test(t)) return 'decide'
-    if (/\b(write|draft|generate text|compose|create content)\b/.test(t)) return 'create'
-    return 'explore'
-  },
-
-  // Context-aware persona — detects beginner/newbie, adjusts voice accordingly
-  expertPersona(domain, rawPrompt = '') {
-    const isBeginner = /\b(newbie|beginner|vibe.?cod|just.?start|i don.?t know|no experience|learning to|help me understand|i.?m new|never (done|built|coded)|don.?t know (what|where|how))\b/i.test(rawPrompt)
-    if (isBeginner) {
-      return ({
-        software: 'Senior Full-Stack Developer who has personally mentored 300+ beginners to their first production app — you always give exact tech names, specific commands, real hosting options with pricing, and zero hand-waving',
-        general:  'World-class teacher who explains everything step by step with real examples, assumes no prior knowledge, and always ends with a concrete action',
-      })[domain] || 'World-class expert who teaches beginners concretely — real names, real commands, no assumed knowledge'
-    }
-    return ({
-      software:    'Senior Software Engineer (12 years, ex-FAANG)',
-      ai_ml:       'Machine Learning Engineer and AI Researcher',
-      finance:     'Chartered Financial Analyst with 15 years in equity markets',
-      science:     'Research Scientist with PhD and 10 years laboratory experience',
-      mathematics: 'Mathematics Professor who makes every reasoning step visible',
-      health:      'Board-certified physician and evidence-based health coach',
-      business:    'Strategy consultant who has advised 50+ startups and Fortune 500s',
-      writing:     'Senior Content Strategist with 15 years at top-tier publications',
-      cooking:     'Professional chef with culinary school background',
-      legal:       'Experienced attorney (informational purposes — not legal advice)',
-      general:     'World-class expert in the relevant domain',
-    })[domain] || 'World-class expert'
-  },
-
-  selectTechniques(domain, outputType) {
-    const byOutput = {
-      debug:      ['Root Cause Analysis', 'Systematic Elimination', 'Tree of Thought'],
-      build:      ['Spec-First Architecture', 'MVP Blueprint', 'Chain-of-Thought'],
-      explain:    ['Feynman Technique', 'Socratic Method', 'Chain-of-Thought'],
-      steps:      ['Chain-of-Thought', 'Spec-First Architecture', 'MVP Blueprint'],
-      analysis:   ['Expert Panel', "Devil's Advocate", 'Comparative Analysis'],
-      comparison: ['Comparative Analysis', 'Decision Matrix', "Devil's Advocate"],
-      plan:       ['Spec-First Architecture', 'Chain-of-Thought', 'Tree of Thought'],
-      solve:      ['Chain-of-Thought', 'Worked Examples', 'Socratic Method'],
-      decide:     ['Decision Matrix', 'Expert Panel', "Devil's Advocate"],
-      create:     ['Few-Shot Expert', 'Chain-of-Thought', 'First Principles'],
-      explore:    ['Expert Panel', 'Feynman Technique', 'Socratic Method'],
-    }
-    const domainBoost = {
-      software:    ['Chain-of-Thought'],
-      ai_ml:       ['First Principles', 'Comparative Analysis'],
-      finance:     ['Chain-of-Thought', 'Decision Matrix'],
-      mathematics: ['Chain-of-Thought', 'Worked Examples'],
-    }
-    const pool = [...new Set([
-      ...(byOutput[outputType] || byOutput.explore),
-      ...(domainBoost[domain] || []),
-    ])].slice(0, 5)
-    return [...pool].sort(() => Math.random() - 0.5).slice(0, 3)
-  },
-
-  // Detect if the user's prompt indicates beginner level
-  _isBeginner(q) {
-    return /\b(newbie|beginner|vibe.?cod|just.?start|i don.?t know|no experience|learning to|i.?m new|never (done|built|coded)|don.?t know (what|where|how)|where (do i|should i) start)\b/i.test(q)
-  },
-
-  buildPrompt(technique, userPrompt, persona, ctxBlock) {
-    const ctx        = ctxBlock ? `\n\n[SESSION CONTEXT — use only where relevant]\n${ctxBlock}\n` : ''
-    const t          = technique
-    const q          = userPrompt
-    const isBeginner = this._isBeginner(q)
-    const begCtx     = isBeginner
-      ? '\nMy level: beginner / vibe coder — prefer simple stacks, low-cost hosting, copy-paste commands, no assumed knowledge.\n'
-      : ''
-    // Injected into every template — LLM silently fixes typos/grammar before answering
-    const fixNote    = '*(Before answering: quietly rewrite the task above — fix any spelling, grammar, or unclear wording — then proceed. Do not mention this correction.)*'
-
-    if (t === 'Chain-of-Thought') return [
-      `You are a ${persona}.${ctx}`,
-      `Task: "${q}"`,
-      fixNote,
-      begCtx,
-      'Think step by step — make every decision and assumption visible:',
-      '',
-      'STEP 1 — CLARIFY: What exactly is being asked? What constraints matter? What would a shallow answer assume that a good answer should not?',
-      'STEP 2 — EVALUATE OPTIONS: What are the 2-3 viable approaches? Compare — what does each optimize for, what does each sacrifice?',
-      'STEP 3 — EXECUTE: Full answer with real specifics — actual names, real commands, working code or numbers. No placeholders.',
-      'STEP 4 — VERIFY: What specific test or check confirms this is correct?',
-      'STEP 5 — NEXT ACTION: The single most concrete thing to do immediately after reading this.',
-      '',
-      'Use numbered lists and code blocks where helpful. Every claim must be specific, not general.',
-    ].join('\n')
-
-    if (t === 'Feynman Technique') return [
-      `You are a ${persona}.${ctx}`,
-      `Topic to explain: "${q}"`,
-      fixNote,
-      begCtx,
-      'Apply the Feynman Technique — teach this as if I have zero prior knowledge:',
-      '',
-      'LEVEL 1 — SIMPLE: Explain to a curious 14-year-old with zero jargon. Use a vivid real-world analogy.',
-      'LEVEL 2 — GAPS: What parts of that explanation were hand-wavy? List 3 specific things that still need unpacking.',
-      'LEVEL 3 — PRECISE: Revisit each gap with correct terminology and mechanisms. No dumbing down this time.',
-      'LEVEL 4 — ANALOGY: One analogy so concrete it sticks permanently. Then: where does the analogy break down?',
-      'LEVEL 5 — TEST: One question whose correct answer proves genuine understanding (not just memorization).',
-    ].join('\n')
-
-    if (t === 'Socratic Method') return [
-      `You are a ${persona}.${ctx}`,
-      `Guide me through: "${q}"`,
-      fixNote,
-      begCtx,
-      'PHASE 1 — DIAGNOSE: Ask me 3 targeted questions that identify exactly where my understanding breaks down. Wait for my answers before continuing.',
-      'PHASE 2 — TARGETED EXPLANATION: Based on my answers, explain only what I actually need — simple first, then precise.',
-      'PHASE 3 — APPLY: Give me one specific, concrete problem or scenario that forces me to use what I just learned.',
-      'PHASE 4 — EDGE: Reveal the counterintuitive case that experts know but beginners always miss.',
-      'PHASE 5 — CONNECT: Name 3 adjacent concepts I should learn next and how each connects to what you just explained.',
-    ].join('\n')
-
-    if (t === 'Expert Panel') return [
-      `3-expert panel on: "${q}"${ctx}`,
-      fixNote,
-      begCtx,
-      'EXPERT 1 — PRACTITIONER (in the field 10+ years): What does real-world experience say? Critical insight. The #1 mistake they see in practice.',
-      'EXPERT 2 — RESEARCHER (evidence-based): What does the data and research actually show? Where does conventional wisdom contradict evidence?',
-      'EXPERT 3 — SKEPTIC (contrarian): What are both experts missing? The most overlooked factor. The question no one is asking.',
-      '',
-      'VERDICT: Where all three agree. The key disagreement. Single most actionable takeaway for someone starting now.',
-    ].join('\n')
-
-    if (t === "Devil's Advocate") return [
-      `You are a brilliant contrarian expert. Question: "${q}"${ctx}`,
-      fixNote,
-      '',
-      'STANDARD VIEW: The conventional expert answer in 2-3 sentences.',
-      'CHALLENGE 1: The biggest assumption everyone makes → why it is wrong or incomplete.',
-      'CHALLENGE 2: The second assumption → why it fails in practice.',
-      'CHALLENGE 3: The third assumption → why the top 1% think differently about this.',
-      'CONTRARIAN TAKE: What the most rigorous experts actually believe that contradicts common wisdom. Evidence for this.',
-      'SYNTHESIS: Where conventional wisdom holds. Where the contrarian view wins. The most defensible nuanced position.',
-      '',
-      'NEXT STEP: Given this more nuanced view, what is the most important thing to do or think about first?',
-    ].join('\n')
-
-    if (t === 'Root Cause Analysis') return [
-      `You are a ${persona}.${ctx}`,
-      `Issue to diagnose: "${q}"`,
-      fixNote,
-      '',
-      'STEP 1 — SYMPTOMS: State the exact problem. Parse what each symptom means technically.',
-      'STEP 2 — REPRODUCE: What is the minimum case that triggers it? What conditions make it NOT occur?',
-      'STEP 3 — CANDIDATES: List every plausible cause ranked by likelihood. For each: evidence FOR / evidence AGAINST.',
-      'STEP 4 — VERIFY: The exact command, log line, or test that confirms the real root cause.',
-      'STEP 5 — FIX: BEFORE (broken code/config) → AFTER (fixed) → WHY this works (mechanism, not just description).',
-      'STEP 6 — PREVENT: One specific guardrail — a test, type check, lint rule, or architecture change — that prevents this entire class of problem.',
-    ].join('\n')
-
-    if (t === 'Comparative Analysis') return [
-      `You are a ${persona}.${ctx}`,
-      `Compare: "${q}"`,
-      fixNote,
-      begCtx,
-      'DIMENSION 1 — WHAT EACH ACTUALLY IS: The fundamental purpose and design philosophy of each option.',
-      'DIMENSION 2 — TRADE-OFFS: What each optimizes for. What each sacrifices. Be specific — not "faster" but "2x faster at X, slower at Y".',
-      'DIMENSION 3 — REAL-WORLD NUMBERS: Benchmarks, pricing, adoption stats, or concrete examples. No vague claims.',
-      'DIMENSION 4 — WHEN TO CHOOSE EACH: The exact conditions (team size, scale, budget, timeline) that make each the right pick.',
-      '',
-      'VERDICT: The stronger option for the most common situation. The single piece of information that would flip this recommendation.',
-      'NEXT STEP: Given this comparison, one concrete action to take right now.',
-    ].join('\n')
-
-    if (t === 'Decision Matrix') return [
-      `Help me decide: "${q}"${ctx}`,
-      fixNote,
-      begCtx,
-      'STEP 1 — CRITERIA: List 4-5 factors that matter most for this decision. Assign each a weight (weights must total 100%).',
-      'STEP 2 — SCORE: For each option × each criterion: score 1-10 with a one-sentence reason. Show the weighted score table.',
-      'STEP 3 — SENSITIVITY CHECK: Which criterion is the decision most sensitive to? What happens if its weight changes significantly?',
-      'STEP 4 — HIDDEN COSTS: What does the matrix not capture that could override the numbers entirely?',
-      'STEP 5 — RECOMMENDATION: The clearest choice based on this analysis. One condition that would change the answer.',
-      '',
-      'NEXT STEP: The first concrete action given this decision.',
-    ].join('\n')
-
-    if (t === 'Few-Shot Expert') return [
-      `You are a ${persona}.${ctx}`,
-      `My task: "${q}"`,
-      fixNote,
-      begCtx,
-      'Step 1 — Choose a similar task yourself and show me ONE complete expert-level example of how you handle it.',
-      'Use real names, real commands, real numbers. Full depth — zero placeholders.',
-      '--- EXAMPLE START ---',
-      '(show your chosen similar task with complete expert treatment here)',
-      '--- EXAMPLE END ---',
-      '',
-      'Step 2 — Apply that exact same depth and standard to my actual task above.',
-      '',
-      'Step 3 — End with:',
-      'EXPERT MOVES: 2-3 specific things an expert does here that a beginner would skip',
-      'COMMON MISTAKE: The #1 error people make at this stage',
-      'NEXT STEP: One concrete action to take immediately after reading this',
-    ].join('\n')
-
-    if (t === 'First Principles') return [
-      `You are a ${persona}.${ctx}`,
-      `Question: "${q}"`,
-      fixNote,
-      begCtx,
-      'Break this down to first principles — rebuild from what is undeniably true:',
-      '',
-      'STEP 1 — CERTAINTIES: State only what cannot be disputed. Label every assumption as an assumption.',
-      'STEP 2 — COMPONENTS: What are the fundamental building blocks of this problem? Strip away conventions.',
-      'STEP 3 — REBUILD: Using only Step 1 facts, construct the answer from scratch. Show every reasoning step.',
-      'STEP 4 — CONTRAST: Where does this first-principles answer differ from the conventional wisdom?',
-      'STEP 5 — ADVANTAGE: What can someone do differently — and better — because they understand it from first principles?',
-      '',
-      'NEXT STEP: One action that only makes sense once you understand this at the first-principles level.',
-    ].join('\n')
-
-    if (t === 'Tree of Thought') return [
-      `You are a ${persona}.${ctx}`,
-      `Problem: "${q}"`,
-      fixNote,
-      begCtx,
-      'Explore 3 distinct approaches before committing:',
-      '',
-      'BRANCH A — CONVENTIONAL: The standard approach. How it works. Genuine pros. Fatal flaw or hidden cost.',
-      'BRANCH B — ALTERNATIVE: A different approach. What it does better than A. What it gives up.',
-      'BRANCH C — UNCONVENTIONAL: The approach most people overlook. Why they skip it. When it wins decisively.',
-      '',
-      'EVALUATION: Score each branch across three axes — Speed / Reliability / Simplicity (1-10 each). Show your reasoning.',
-      'RECOMMENDATION: Which branch wins for this specific situation, and why. Exact next steps to execute it.',
-      '',
-      'EXPERT MOVES: What an expert considers here that most people skip',
-      'COMMON MISTAKE: The most common wrong choice and why people make it',
-    ].join('\n')
-
-    if (t === 'Worked Examples') return [
-      `You are a ${persona}.${ctx}`,
-      `Topic: "${q}"`,
-      fixNote,
-      begCtx,
-      'Build understanding through examples — from simple to realistic:',
-      '',
-      'EXAMPLE 1 — SIMPLE CASE: A stripped-down version of this problem. Walk through every step with full visible reasoning.',
-      'EXAMPLE 2 — REALISTIC CASE: A real-world version with actual names, numbers, or code. Full solution showing every step.',
-      `ORIGINAL PROBLEM: Now apply the same method to: "${q}". Show every step without skipping.`,
-      'GENERAL PATTERN: The rule, formula, or principle that both examples illustrate.',
-      'COMMON MISTAKES: The top 2 errors. Show the wrong version and the correct version side by side.',
-      '',
-      'NEXT STEP: One practice problem or concrete application to try immediately.',
-    ].join('\n')
-
-    if (t === 'Spec-First Architecture') return [
-      `You are a ${persona}.${ctx}`,
-      `Project goal: "${q}"`,
-      fixNote,
-      begCtx,
-      'Your job:',
-      '1. Choose the best modern stack for this situation — optimize for ' + (isBeginner ? 'beginner simplicity + production readiness + lowest cost' : 'reliability + developer experience + scalability'),
-      '2. Explain WHY each technology was chosen over its top alternative',
-      '3. Show exactly how to go from a blank terminal to a deployed, working app',
-      '4. Use real names, real commands, real file names — zero placeholders',
-      '',
-      'Output — cover every section:',
-      '1. RECOMMENDED STACK — frontend / backend / database / auth / hosting (specific tools + versions)',
-      '2. WHY THIS STACK — tradeoffs vs the top alternative for each choice',
-      '3. ARCHITECTURE — how the pieces connect and communicate',
-      '4. FOLDER STRUCTURE — every file/folder with one-line purpose',
-      '5. BUILD ORDER — step-by-step from blank machine to running locally',
-      '6. DEPLOYMENT — exact steps + commands to push to production',
-      '7. COMMON MISTAKES — top 3 things people get wrong here + how to avoid each',
-      '8. NEXT IMMEDIATE ACTION — the first command or file to create right now',
-      '',
-      'EXPERT MOVES: 2-3 decisions an expert makes here that a beginner would skip',
-      'COMMON MISTAKE: The #1 thing that causes this type of project to fail or stall',
-      'NEXT STEP: One action to take in the next 10 minutes',
-    ].join('\n')
-
-    if (t === 'MVP Blueprint') return [
-      `You are a startup engineer (8 years) who ships fast.${ctx}`,
-      `Task: "${q}"`,
-      fixNote,
-      begCtx,
-      'Ship the fastest working version that proves the concept is real.',
-      '',
-      'MVP SCOPE: The 3 features that prove core value — list exactly what is IN scope and what is deliberately OUT.',
-      'TECH STACK: Simplest stack that works — specific framework + database + hosting (exact names + versions). No over-engineering.',
-      'SETUP: Every command from blank terminal to running app locally. Copy-paste ready — no gaps, no "you know the rest".',
-      'FIRST FILE: The single most important file written in full. Real content, zero placeholders.',
-      'DEPLOYMENT: Exact steps to push to production — platform name + commands + environment variables needed.',
-      'DONE WHEN: The specific observable result that proves the MVP works end-to-end.',
-      '',
-      'EXPERT MOVES: 2-3 shortcuts experts use to ship faster without cutting corners that matter',
-      'COMMON MISTAKE: What overengineering looks like here and why to avoid it',
-      'NEXT STEP: The very first command or file to create right now',
-    ].join('\n')
-
-    if (t === 'Systematic Elimination') return [
-      `You are a ${persona}.${ctx}`,
-      `Issue: "${q}"`,
-      fixNote,
-      '',
-      'LIST ALL SUSPECTS: Every possible cause of this problem, ranked by likelihood.',
-      'ELIMINATE: For each candidate — one piece of evidence it IS the cause, one piece it is NOT.',
-      'REMAINING CANDIDATE: The one suspect that survives elimination. Why it alone was not ruled out.',
-      'CONFIRM: The exact test, command, or log check that definitively proves or disproves this candidate.',
-      'FIX + VERIFY: The complete fix with before/after. The exact output or behavior that proves it worked.',
-      '',
-      'PREVENT: One guardrail — test, assertion, or architecture change — that stops this entire class of problem from recurring.',
-    ].join('\n')
-
-    // Generic fallback — structured and output-format-aware
-    return [
-      `You are a ${persona}.${ctx}`,
-      `Task: "${q}"`,
-      fixNote,
-      begCtx,
-      `Apply ${t} to this task — be specific, not generic:`,
-      '',
-      '1. UNDERSTAND: Restate precisely what is being asked. Identify hidden assumptions.',
-      '2. ANALYZE: Break into core components. Evaluate 2-3 approaches.',
-      '3. EXECUTE: Full answer with real specifics — actual names, commands, numbers, or code.',
-      '4. VERIFY: How do we confirm this is correct? What specific check proves it?',
-      '5. NEXT ACTION: One concrete step to take immediately.',
-    ].join('\n')
-  },
-
+  // Build 3 complete offline prompts -- no hardcoded technique wrappers
+  // Each prompt is a complete expert instruction that works across any LLM
   build(rawInput) {
-    // Strip any existing PET wrapper so we never get Task:"Task:"..."" double-nesting
-    const prompt      = this.stripWrapper(rawInput)
-    const domain      = this.detectDomain(prompt)
-    const outputType  = this.detectOutputType(prompt)
-    const persona     = this.expertPersona(domain, prompt)  // pass for beginner detection
-    const techniques  = this.selectTechniques(domain, outputType)
-    const ctxBlock    = RAG_STORE.buildContextBlock(prompt)
+    const prompt  = this.stripWrapper(rawInput)
+    const { domain, persona, temperature } = this.inferDomain(prompt)
+    const ctx     = RAG_STORE.buildContextBlock(prompt)
+    const ctxNote = ctx ? `\n\n[PRIOR SESSION CONTEXT -- use where relevant]\n${ctx}\n` : ''
 
-    const TECH_LABELS = {
-      'Chain-of-Thought':        { emoji: '⛓', why: 'Makes every reasoning step explicit — no skipped logic' },
-      'Feynman Technique':       { emoji: '🧠', why: 'Forces genuine clarity — if you cannot explain it simply, you do not understand it' },
-      'Socratic Method':         { emoji: '🔬', why: 'Guided questions surface real gaps — not generic answers' },
-      'Expert Panel':            { emoji: '🎓', why: 'Multiple expert angles expose blind spots any single view misses' },
-      "Devil's Advocate":        { emoji: '😈', why: 'Challenging assumptions forces you to defend or refine your thinking' },
-      'Root Cause Analysis':     { emoji: '🔍', why: 'Finds the real cause, not symptoms — prevents recurrence' },
-      'Comparative Analysis':    { emoji: '⚖️', why: 'Structured comparison surfaces trade-offs a simple answer would miss' },
-      'Decision Matrix':         { emoji: '📊', why: 'Scores options against weighted criteria — removes gut-feel bias' },
-      'Few-Shot Expert':         { emoji: '🎯', why: 'Shows the exact quality standard via examples before applying to your case' },
-      'First Principles':        { emoji: '🧱', why: 'Strips assumptions — rebuilds from what is fundamentally true' },
-      'Tree of Thought':         { emoji: '🌳', why: 'Explores multiple paths simultaneously — picks the strongest branch' },
-      'Worked Examples':         { emoji: '📐', why: 'Seeing solved examples first builds pattern recognition' },
-      'Spec-First Architecture': { emoji: '⚙️', why: 'Thinks through the full system before writing a single line' },
-      'MVP Blueprint':           { emoji: '🚀', why: 'Fastest path from zero to something working' },
-      'Systematic Elimination':  { emoji: '🗑️', why: 'Methodically rules out causes until only the real one remains' },
-    }
+    // Generate 3 meaningfully different complete prompts
+    const prompts = [
+      // Prompt 1: Complete expert implementation (recommended)
+      {
+        id: 'r1', recommended: true,
+        technique: 'Complete Expert Scope',
+        label: 'Expert Full Scope',
+        why: 'Covers everything implied by your request, not just what you typed',
+        prompt: `You are a ${persona}.${ctxNote}
 
-    return techniques.map((tech, i) => {
-      const meta = TECH_LABELS[tech] || { emoji: '✦', why: `${tech} applied to this specific task` }
-      return {
-        id:          `r${i + 1}`,
-        label:       `${meta.emoji} ${tech}`,
-        technique:   tech,
-        why:         meta.why,
-        prompt:      this.buildPrompt(tech, prompt, persona, i === 0 ? ctxBlock : null),
-        recommended: i === 0,
+Request: "${prompt}"
+
+Think carefully about what this request ACTUALLY requires -- go beyond the literal words.
+
+Provide a complete, expert-level response:
+1. State what you understand the full scope to be (including things the user implied but did not say)
+2. Give your complete recommendation with specific names, versions, tools, or frameworks
+3. Provide the most important implementation detail, example, or worked case
+4. Address the hardest part -- the thing most people get wrong or skip
+5. Give the single most important first action to take right now
+
+Be specific. Use real names. No placeholder text. No "it depends" without a concrete recommendation.`,
         domain,
-        outputType,
-        hasContext:  i === 0 && !!ctxBlock,
-      }
-    })
+        outputType: 'how_to',
+      },
+      // Prompt 2: Fast/MVP angle
+      {
+        id: 'r2', recommended: false,
+        technique: 'Fastest Working Version',
+        label: 'Fast MVP Path',
+        why: 'Gets to a working result in the shortest path -- opinionated and concrete',
+        prompt: `You are a ${persona} who values shipping over perfection.${ctxNote}
+
+Request: "${prompt}"
+
+Give me the FASTEST path to a working, quality result:
+1. What is the minimum viable version that proves the concept works?
+2. Exact tools/stack/approach -- no alternatives, just your single best recommendation
+3. Complete step-by-step from zero to working (real commands, real code, real numbers)
+4. What to defer to version 2 (and why it is safe to skip now)
+5. The one thing that will break first and how to prevent it
+
+Opinionated. Specific. No waffling. If you had to build this today with 4 hours, what would you do?`,
+        domain,
+        outputType: 'how_to',
+      },
+      // Prompt 3: Deep expert analysis -- the part everyone misses
+      {
+        id: 'r3', recommended: false,
+        technique: 'Expert Depth -- What Gets Missed',
+        label: 'Expert Deep Dive',
+        why: 'Surfaces the non-obvious insights and edge cases that separate experts from beginners',
+        prompt: `You are a ${persona} who has seen every mistake and edge case in this domain.${ctxNote}
+
+Request: "${prompt}"
+
+Go beyond the obvious answer. Tell me:
+1. What is the conventional wisdom on this -- and where is it wrong or incomplete?
+2. The specific insight that only comes from experience (the thing beginners always miss)
+3. The edge case or failure mode that will catch me later if I do not account for it now
+4. The expert-level version of this approach -- what does the top 1% do differently?
+5. A concrete worked example that makes the non-obvious part clear
+6. One follow-up question I should be asking that I have not thought to ask
+
+Be honest. Do not validate bad assumptions. Show me the real complexity.`,
+        domain,
+        outputType: 'analysis',
+      },
+    ]
+
+    return prompts
   },
 }
 
