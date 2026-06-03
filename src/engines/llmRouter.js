@@ -1,146 +1,182 @@
 /**
- * PET v2 -- Universal LLM Router
- * Browser-native: calls provider APIs directly from the service worker.
- * CI/CD safe: purely additive -- existing code paths unchanged if this module
- * is not invoked (old worker.js flow still works for Groq/offline).
+ * PET v3 -- Intelligent Prompt Architecture Engine
  *
- * FAIL POINTS GUARDED:
- * - CORS: service workers bypass CORS; Claude needs special header
- * - Token limits: prompts truncated at 800 chars input max
- * - Rate limits: exponential backoff + provider fallback chain
- * - JSON failures: multi-layer safeJSON with heuristic repair
- * - Network timeout: AbortSignal.timeout(20000) on every call
- * - Context invalidated: runtime.id guard at call-site
+ * Pipeline (3 steps, all LLM-driven, zero hardcoded templates):
+ *   Step 0  CORRECT   -- spell/grammar fix (50 tokens, fast model)
+ *   Step 1  EXPAND    -- intent architect: infers the FULL scope the user implied
+ *   Step 2  ARCHITECT -- generates 3 complete, specific, ready-to-use expert prompts
+ *
+ * Temperature is dynamic per domain (code=0.28, creative=0.92, emotional=0.78).
+ * No DPB templates. No hardcoded technique lists. Everything is prompt-driven.
  */
 
 import { PROVIDERS, getModel, getEndpoint } from './providerRegistry.js'
 
-// ── Token budget ───────────────────────────────────────────────────────────
-const MAX_INPUT_CHARS  = 800   // ~200 tokens -- keeps SENSE call cheap
-const MAX_REWRITE_TOKENS = 900  // output budget for 3 prompts
+// ── Token budgets ──────────────────────────────────────────────────────────
+const MAX_INPUT_CHARS   = 1000
+const CORRECT_TOKENS    = 80
+const EXPAND_TOKENS     = 500
+const ARCHITECT_TOKENS  = 1800
+const EVAL_TOKENS       = 500
 
-// ── Universal 50+ domain meta-prompt ──────────────────────────────────────
-// LLM reads this and DECIDES format -- no hardcoded CoT forced on every prompt
-const SENSE_SYS = `You are PET's intent classifier. Analyse the user's input and return classification JSON.
+// ── Dynamic temperature map -- low for precision, high for creativity ──────
+const TEMPERATURE_MAP = {
+  // Technical -- precision required
+  software: 0.30, web_dev: 0.30, frontend: 0.28, backend: 0.25,
+  mobile_dev: 0.30, databases: 0.22, cybersecurity: 0.20,
+  systems: 0.22, networking: 0.25, devops: 0.28, cloud: 0.28,
+  data_science: 0.32, machine_learning: 0.30, ai: 0.32, nlp: 0.30,
+  // Math/Science -- highest precision
+  mathematics: 0.15, calculus: 0.15, statistics: 0.18,
+  chemistry: 0.20, physics: 0.20, biology: 0.25, genetics: 0.20,
+  // Analysis -- medium-low
+  finance: 0.32, economics: 0.35, investing: 0.30, research: 0.35,
+  law: 0.25, medicine: 0.28, pharmacology: 0.22,
+  // Education -- medium
+  education: 0.55, explanation: 0.50, learning: 0.58,
+  // Health/Nutrition -- medium
+  health: 0.42, nutrition: 0.45, fitness: 0.50,
+  // Personal/Emotional -- warm but not chaotic
+  mental_health: 0.72, anxiety: 0.70, therapy: 0.75,
+  relationships: 0.75, emotional_support: 0.78, parenting: 0.68,
+  // Creative -- maximum variety
+  creative_writing: 0.92, fiction: 0.93, poetry: 0.95, screenwriting: 0.90,
+  music: 0.88, visual_arts: 0.90, fashion: 0.85, styling: 0.88,
+  beauty: 0.82, cooking: 0.78, brainstorm: 0.92,
+  // Business/Marketing -- medium
+  marketing: 0.62, copywriting: 0.68, branding: 0.65,
+  business_strategy: 0.45, entrepreneurship: 0.55,
+}
 
-DOMAINS (pick the most specific):
-women_health|mens_health|mental_health|anxiety|depression|therapy|relationships|sexuality|parenting|elderly_care|
-nutrition|diet|weight_loss|fitness|sports_science|bodybuilding|yoga|wellness|
-medicine|pharmacology|symptoms|chronic_illness|first_aid|dental|vision|
-fashion|styling|outfit|color_theory|body_type|sustainable_fashion|luxury|streetwear|
-beauty|skincare|haircare|makeup|fragrance|grooming|
-economics|macroeconomics|microeconomics|behavioral_economics|development_economics|
-personal_finance|budgeting|debt|savings|retirement|insurance|tax|credit|
-investing|stocks|options|etf|technical_analysis|fundamental_analysis|portfolio|
-crypto|defi|nft|blockchain|web3|
-real_estate|mortgage|renting|commercial_property|reits|
-law|contracts|intellectual_property|employment_law|criminal_law|immigration|family_law|
-business_strategy|entrepreneurship|startups|ecommerce|saas|fundraising|
-marketing|seo|content_marketing|social_media|advertising|copywriting|branding|
-sales|negotiation|customer_success|crm|
-software|web_dev|mobile_dev|backend|frontend|devops|cloud|
-data_science|machine_learning|ai|nlp|computer_vision|
-cybersecurity|networking|systems|databases|
-creative_writing|fiction|screenwriting|poetry|journalism|technical_writing|
-music|music_theory|production|mixing|instruments|songwriting|
-visual_arts|photography|videography|film|animation|graphic_design|ux_design|
-architecture|interior_design|urban_planning|
-history|geopolitics|philosophy|ethics|religion|sociology|anthropology|
-chemistry|organic_chemistry|physics|quantum|astronomy|geology|climate|ecology|
-biology|genetics|evolution|neuroscience|microbiology|anatomy|
-mathematics|calculus|statistics|linear_algebra|discrete_math|
-cooking|baking|food_science|wine|mixology|
-agriculture|gardening|botany|animal_husbandry|
-automotive|aviation|maritime|mechanical_engineering|electrical_engineering|civil_engineering|
-home_improvement|diy|interior_renovation|
-travel|language_learning|cultural_etiquette|visa|backpacking|luxury_travel|
-education|exam_prep|studying|tutoring|curriculum|
-career|job_hunting|resume|interview|salary|leadership|management|
-sports|esports|gaming|fitness_coaching|
-psychology|cognitive_science|behavioral_science|neurology|
-pet_care|veterinary|animal_behavior|
-spirituality|meditation|mindfulness|astrology|
-general
+function getDomainTemperature(domain) {
+  if (!domain) return 0.65
+  const key = domain.toLowerCase().replace(/[-\s]+/g, '_')
+  // Exact match first
+  if (TEMPERATURE_MAP[key] !== undefined) return TEMPERATURE_MAP[key]
+  // Partial match
+  for (const [k, v] of Object.entries(TEMPERATURE_MAP)) {
+    if (key.includes(k) || k.includes(key)) return v
+  }
+  return 0.65
+}
 
-OUTPUT FORMAT options (pick what the content NEEDS):
-how_to|analysis|creative|decision|emotional_support|comparison|debug|plan|explanation|research|persuasion|narrative|critique|brainstorm
+// ── STEP 0: CORRECT -- grammar + spell fix ────────────────────────────────
+// Tiny call. Returns the corrected text string (not JSON).
+// "i want to build wmotion website" → "I want to build an emotion detection website"
+const CORRECT_SYS = `Fix spelling, grammar, and obvious word errors in the user's input.
+Infer the most likely intended word for typos (e.g. "wmotion" → "emotion", "nvabar" → "navbar").
+ONLY fix errors -- do not add words, do not change intent, do not explain.
+Return ONLY the corrected text. No quotes. No explanation.`
 
-TONE options:
-empathetic|professional|casual|technical|educational|motivational|creative|direct|nurturing|investigative
+// ── STEP 1: EXPAND -- intent architect ────────────────────────────────────
+// Core innovation: goes far beyond what the user typed.
+// Infers the FULL scope, tech stack, all implied requirements, correct domain.
+// "build emotion website" → full spec with MediaPipe, auth, animations, DB.
+const EXPAND_SYS = `You are an expert intent architect. Your job: read the user's input and infer everything they ACTUALLY NEED, not just what they typed.
 
-Return ONLY valid JSON (no markdown, no explanation):
-{"domain":"<specific>","sub_domain":"<precise sub-area>","urgency":"low|medium|high|critical","output_format":"<format>","tone":"<tone>","user_context":"<one sentence inferred situation>","goal":"<what they actually want>","persona":"<exact expert role -- match domain precisely>","techniques":[{"name":"<T1>","label":"<emoji label>","why":"<one sentence why for THIS specific input>"},{"name":"<T2>","label":"<emoji label>","why":"<one sentence>"},{"name":"<T3>","label":"<emoji label>","why":"<one sentence>"}]}
+Think like the world's best domain expert who has built this 100 times.
+Go BEYOND the literal words. Infer the complete requirements, the right tools, the hardest parts.
 
-TECHNIQUE POOL -- pick 3 that best match the output_format:
-Chain-of-Thought|Socratic Method|Feynman Technique|Expert Panel|Devil's Advocate|
-Comparative Analysis|Decision Matrix|First Principles|Tree of Thought|Root Cause Analysis|
-Empathetic Inquiry|Narrative Arc|Before-After-Bridge|Hook-Problem-Solution-CTA|
-AIDA Framework|5-Whys|Rubber Duck Debug|SWOT Analysis|Jobs-to-be-Done|
-Motivational Interviewing|Cognitive Reframing|Worked Examples|Spec-First Architecture|
-MVP Blueprint|Systematic Elimination|Research Brief|Few-Shot Expert`
-
-// ── Token-efficient rewrite prompt (LLM decides structure) ─────────────────
-const REWRITE_SYS = `You are PET -- Prompt Enhancement Tool. Generate 3 different expert prompts.
-
-TOKEN EFFICIENCY: 80-180 words per prompt. Specific > long.
-FORMAT RULES -- let the domain and format dictate structure:
-- emotional_support → empathy first, validate, then practical (NO bullet lists for first response)
-- creative → mood/constraints/freedom, not rigid steps
-- decision → options + MY criteria + MY situation + what I need to hear
-- how_to → goal + my context + constraints + output format I need
-- explanation → my current knowledge level + what specifically confuses me + analogy preference
-- debug → exact error + what I tried + environment + expected vs actual
-- research → scope + framework + evidence type + output format
-- comparison → items + my use case + weighted criteria
-- plan → timeline + resources + constraints + success definition
-- analysis → domain + framework + data I have + recommendations needed
-
-PERSONA -- ONE sentence, domain-matched, no lengthy credential lists:
-✓ "You are a board-certified OB-GYN specialising in PCOS and hormonal health"  
-✓ "You are a CFA charterholder with 15 years in equity research and portfolio management"
-✓ "You are a licensed therapist specialising in CBT for anxiety and relationship issues"
-✓ "You are a personal stylist who has dressed executives for Fortune 500 boardrooms"
-✓ "You are a Michelin-trained chef specialising in plant-based Mediterranean cuisine"
-✗ NEVER "You are a senior software engineer" for health/fashion/cooking/emotion questions
-✗ NEVER force ROLE/CONTEXT/GOAL/TECH structure on creative or emotional topics
+Examples of intent expansion:
+- "build emotion website" → needs: real-time webcam ML (MediaPipe), navbar, auth (SSO), UI animations, dashboard
+- "fashion outfit for interview" → needs: industry context, body type considerations, color theory, specific brands
+- "explain supply elasticity" → needs: level calibration (student/professional), worked example with real numbers, visual analogy
+- "PCOS diet plan" → needs: insulin sensitivity, hormonal balance foods, anti-inflammatory approach, cycle-aware eating
 
 Return ONLY valid JSON:
-{"goal":"<user's actual goal in plain language>","rewrites":[
-{"id":"r1","technique":"<name>","label":"<emoji label>","why":"<one sentence why this technique fits>","prompt":"<complete prompt 80-180 words>","recommended":true,"token_est":<integer>},
+{
+  "corrected": "<clean, grammatically correct version of the input>",
+  "true_intent": "<one sentence: what the user actually wants to accomplish>",
+  "inferred_requirements": ["<requirement 1 -- specific>", "<req 2>", "<req 3>", "<req 4>", "<req 5>"],
+  "domain": "<primary domain from the full domain taxonomy>",
+  "sub_domain": "<specific sub-area>",
+  "user_level": "beginner|intermediate|advanced|expert",
+  "complexity": "low|medium|high|expert",
+  "output_format": "how_to|plan|explanation|analysis|creative|debug|emotional_support|research|brainstorm",
+  "persona": "<exact expert role -- specific, not generic>",
+  "tone": "technical|educational|empathetic|direct|creative|professional|motivational",
+  "tech_stack": {<only if technical domain -- specific tools with versions, null otherwise>},
+  "key_concepts": ["<concept the expert knows that the user forgot to mention>"],
+  "hardest_part": "<the single hardest thing to get right in this domain/task>",
+  "recommended_temperature": <0.15-0.95 -- use domain knowledge to set this>
+}
+
+RULES:
+- inferred_requirements: 4-7 items, each specific (not "good UI" but "smooth scroll navbar with blur backdrop + active link highlighting")
+- persona: domain-matched precisely ("Senior frontend engineer specialising in ML web apps" not "expert")
+- output_format "how_to": any build/create/implement/develop/make request -- NEVER use "decision" for these
+- output_format "decision": ONLY when user names 2+ explicit choices to compare
+- tech_stack: include specific versions when possible (Next.js 14, not just Next.js)`
+
+// ── STEP 2: ARCHITECT -- generate 3 complete ready-to-use prompts ──────────
+// Revolutionary: generates COMPLETE prompts that cover the FULL inferred scope.
+// No wrappers, no templates. The LLM decides structure based on domain.
+// Result is immediately sendable to any LLM and gets a detailed expert response.
+const ARCHITECT_SYS = `You are PET -- the world's most capable prompt architect.
+
+You receive:
+- The user's original (possibly vague) input
+- A fully expanded intent object with inferred requirements, tech stack, persona, etc.
+
+Your job: generate 3 COMPLETE, IMMEDIATELY USABLE expert prompts that cover the FULL inferred scope.
+
+RULES FOR EVERY PROMPT:
+1. COMPLETE COVERAGE -- address ALL inferred_requirements, not just what the user typed
+2. SPECIFIC -- real tech names, real library versions, real commands, real numbers
+3. NO PLACEHOLDERS -- never write [your code here] or [add your API key] or [example]
+4. READY TO SEND -- someone should be able to copy-paste this prompt and get a complete expert answer
+5. DOMAIN-APPROPRIATE STRUCTURE -- code prompts need architecture+steps, fashion needs context+occasion+style rules, science needs methodology+evidence, emotional topics need validation+practical steps
+6. LENGTH -- 180-400 words per prompt. More complex = longer. Cover everything.
+7. PERSONA MATTERS -- start with the persona in the prompt (it changes how the LLM responds)
+8. HARDEST PART -- always address it explicitly, since that is what gets skipped in generic answers
+
+3 PROMPTS MUST BE MEANINGFULLY DIFFERENT:
+- Prompt 1 (recommended): The BEST complete implementation -- covers the full scope, most thorough
+- Prompt 2: A different angle -- faster/MVP approach, or different tech choice, or different framing
+- Prompt 3: A different perspective -- beginner-friendly breakdown, or contrarian approach, or deep-dive on the hardest part
+
+DOMAIN STRUCTURE GUIDE (let domain dictate, not a template):
+- web_dev/code: persona + exact requirements + tech stack + build order + hardest part + first command
+- fashion/beauty: persona + occasion context + body/skin specifics + style rules + specific items/brands + avoid list
+- health/medical: persona + safety disclaimer + evidence-based specifics + actionable protocol + when to escalate
+- finance: persona + risk disclosure + specific numbers + worked example + decision criteria
+- emotional/mental: validation first + normalise + practical steps + NOT rushing to solutions
+- science/biology: methodology + mechanism + evidence quality + real-world application
+- cooking/food: persona + technique + exact ingredients + timing + what-to-watch-for
+- philosophy/history: thesis + counterargument + synthesis + primary sources
+
+Return ONLY valid JSON:
+{"corrected_prompt":"<the spell/grammar fixed version>","true_intent":"<one sentence>","domain":"<domain>","rewrites":[
+{"id":"r1","technique":"<name of approach used>","label":"<emoji + short label>","why":"<one sentence why this angle for THIS specific input>","prompt":"<COMPLETE ready-to-use expert prompt -- 180-400 words>","recommended":true,"token_est":<integer>},
 {"id":"r2","technique":"<name>","label":"<emoji label>","why":"<one sentence>","prompt":"<complete prompt>","recommended":false,"token_est":<integer>},
 {"id":"r3","technique":"<name>","label":"<emoji label>","why":"<one sentence>","prompt":"<complete prompt>","recommended":false,"token_est":<integer>}
 ]}`
 
-// ── Safe JSON extractor (multi-layer) ─────────────────────────────────────
+// ── Safe JSON extractor ────────────────────────────────────────────────────
 export function safeJSON(raw) {
   if (!raw) return null
   const t = raw.trim()
   try { return JSON.parse(t) } catch {}
-  // Strip markdown fences
   const fenced = t.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
   if (fenced) { try { return JSON.parse(fenced[1].trim()) } catch {} }
-  // Brute-force brace extraction
   const s = t.indexOf('{'), e = t.lastIndexOf('}')
   if (s !== -1 && e > s) {
     const candidate = t.slice(s, e + 1)
     try { return JSON.parse(candidate) } catch {}
-    // Heuristic: strip trailing commas
     try { return JSON.parse(candidate.replace(/,(\s*[}\]])/g, '$1')) } catch {}
-    // Heuristic: close unclosed strings/arrays
     try { return JSON.parse(candidate + ']}') } catch {}
   }
   return null
 }
 
-// ── Per-provider request builder ───────────────────────────────────────────
-function buildRequest(provider, model, systemPrompt, userPrompt, maxTokens) {
+// ── Per-provider request builder (temperature-aware) ──────────────────────
+function buildRequest(provider, model, systemPrompt, userPrompt, maxTokens, temperature = 0.65) {
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user',   content: userPrompt   },
   ]
 
   if (provider === 'gemini') {
-    // Gemini uses a different structure -- combine system + user
     return {
       body: JSON.stringify({
         contents: [{
@@ -149,7 +185,7 @@ function buildRequest(provider, model, systemPrompt, userPrompt, maxTokens) {
         }],
         generationConfig: {
           maxOutputTokens: maxTokens,
-          temperature: 0.7,
+          temperature,
           responseMimeType: 'application/json',
         },
       }),
@@ -157,25 +193,24 @@ function buildRequest(provider, model, systemPrompt, userPrompt, maxTokens) {
   }
 
   if (provider === 'claude') {
-    // Anthropic format
     return {
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        temperature: 0.7,
+        temperature,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),
     }
   }
 
-  // OpenAI-compatible (Groq, OpenAI, Grok, DeepSeek, OpenRouter, Kimi, Ollama)
+  // OpenAI-compatible (Groq, OpenAI, Grok, DeepSeek, OpenRouter, Ollama)
   return {
     body: JSON.stringify({
       model,
       messages,
       max_tokens: maxTokens,
-      temperature: 0.7,
+      temperature,
       response_format: provider === 'openai' ? { type: 'json_object' } : undefined,
     }),
   }
@@ -184,66 +219,49 @@ function buildRequest(provider, model, systemPrompt, userPrompt, maxTokens) {
 // ── Per-provider header builder ────────────────────────────────────────────
 function buildHeaders(provider, apiKey) {
   const base = { 'Content-Type': 'application/json' }
-
-  if (provider === 'gemini') return base  // key in URL
-
-  if (provider === 'claude') return {
+  if (provider === 'gemini')     return base
+  if (provider === 'claude')     return {
     ...base,
     'x-api-key': apiKey,
     'anthropic-version': '2023-06-01',
-    // Required for direct browser access to Anthropic API
     'anthropic-dangerous-direct-browser-access': 'true',
   }
-
   if (provider === 'openrouter') return {
     ...base,
     'Authorization': `Bearer ${apiKey}`,
     'HTTP-Referer': 'https://krishianjan.github.io/PET-Chain/',
     'X-Title': 'PET -- Prompt Enhancement Tool',
   }
-
-  // OpenAI-compatible
   return { ...base, 'Authorization': `Bearer ${apiKey}` }
 }
 
 // ── Per-provider URL builder ───────────────────────────────────────────────
 function buildURL(provider, model, apiKey) {
   const base = getEndpoint(provider)
-
-  if (provider === 'gemini') {
-    return `${base}/v1beta/models/${model}:generateContent?key=${apiKey}`
-  }
-  if (provider === 'ollama') {
-    return `${base}/v1/chat/completions`
-  }
+  if (provider === 'gemini') return `${base}/v1beta/models/${model}:generateContent?key=${apiKey}`
+  if (provider === 'ollama') return `${base}/v1/chat/completions`
   return `${base}/chat/completions`
 }
 
 // ── Per-provider response extractor ───────────────────────────────────────
 function extractText(provider, data) {
   if (!data) return ''
-
-  if (provider === 'gemini') {
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  }
-  if (provider === 'claude') {
-    return data.content?.[0]?.text || ''
-  }
-  // OpenAI-compatible
+  if (provider === 'gemini') return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  if (provider === 'claude') return data.content?.[0]?.text || ''
   return data.choices?.[0]?.message?.content || ''
 }
 
-// ── Core single LLM call with retry ───────────────────────────────────────
-async function callOnce(provider, apiKey, model, systemPrompt, userPrompt, maxTokens = 600) {
+// ── Core call with temperature ─────────────────────────────────────────────
+async function callOnce(provider, apiKey, model, systemPrompt, userPrompt, maxTokens = 600, temperature = 0.65) {
   const url     = buildURL(provider, model, apiKey)
   const headers = buildHeaders(provider, apiKey)
-  const { body } = buildRequest(provider, model, systemPrompt, userPrompt, maxTokens)
+  const { body } = buildRequest(provider, model, systemPrompt, userPrompt, maxTokens, temperature)
 
   const res = await fetch(url, {
     method:  'POST',
     headers,
     body,
-    signal:  AbortSignal.timeout(20000),
+    signal:  AbortSignal.timeout(25000),
   })
 
   if (!res.ok) {
@@ -256,12 +274,12 @@ async function callOnce(provider, apiKey, model, systemPrompt, userPrompt, maxTo
 }
 
 // ── Exponential backoff retry ──────────────────────────────────────────────
-async function callWithRetry(provider, apiKey, model, sys, user, maxTokens, retries = 2) {
+async function callWithRetry(provider, apiKey, model, sys, user, maxTokens, temperature = 0.65, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await callOnce(provider, apiKey, model, sys, user, maxTokens)
+      return await callOnce(provider, apiKey, model, sys, user, maxTokens, temperature)
     } catch (err) {
-      const is429 = err.message.includes('429')
+      const is429    = err.message.includes('429')
       const isTimeout = err.message.includes('timeout') || err.name === 'TimeoutError'
       if (attempt < retries && (is429 || isTimeout)) {
         await new Promise(r => setTimeout(r, (attempt + 1) * 1200))
@@ -272,122 +290,195 @@ async function callWithRetry(provider, apiKey, model, sys, user, maxTokens, retr
   }
 }
 
-// ── STEP 1: SENSE -- fast intent classification ─────────────────────────────
-// Uses a smaller/faster model for cost efficiency
-export async function sense(rawPrompt, provider, apiKey) {
-  const FAST_MODELS = {
-    gemini:      'gemini-2.0-flash',
-    openai:      'gpt-4o-mini',
-    groq:        'llama-3-8b-8192',
-    claude:      'claude-3-haiku-20240307',
-    grok:        'grok-beta',
-    openrouter:  'meta-llama/llama-3-8b-instruct:free',
-    deepseek:    'deepseek-chat',
-    ollama:      null, // filled from model selection
-  }
+// ── Fast model map (used for CORRECT + EXPAND -- cheap calls) ──────────────
+const FAST_MODELS = {
+  gemini:     'gemini-2.0-flash',
+  openai:     'gpt-4o-mini',
+  groq:       'llama-3-8b-8192',
+  claude:     'claude-3-5-haiku-20241022',
+  grok:       'grok-3-mini',
+  openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
+  deepseek:   'deepseek-chat',
+  ollama:     null,
+}
 
+// ── STEP 0: CORRECT -- spell/grammar fix ─────────────────────────────────
+export async function correctInput(rawPrompt, provider, apiKey) {
   const fastModel = FAST_MODELS[provider] || getModel(provider, 'fast')
-  const truncated = rawPrompt.slice(0, MAX_INPUT_CHARS)
+  if (!fastModel) return rawPrompt
+
+  try {
+    const corrected = await callOnce(
+      provider, apiKey, fastModel,
+      CORRECT_SYS,
+      rawPrompt.slice(0, 600),
+      CORRECT_TOKENS,
+      0.1   // very low temperature -- deterministic correction
+    )
+    const clean = corrected?.trim()
+    // Only use if it looks like a real correction (not empty, not much longer)
+    if (clean && clean.length > 3 && clean.length < rawPrompt.length * 2.5) {
+      return clean
+    }
+    return rawPrompt
+  } catch {
+    return rawPrompt  // correction is optional -- never block the pipeline
+  }
+}
+
+// ── STEP 1: EXPAND -- intent architect ───────────────────────────────────
+export async function expandIntent(correctedPrompt, provider, apiKey) {
+  const fastModel = FAST_MODELS[provider] || getModel(provider, 'fast')
+  if (!fastModel) return null
 
   try {
     const raw = await callWithRetry(
       provider, apiKey, fastModel,
-      SENSE_SYS,
-      `Classify this: "${truncated}"`,
-      250  // tiny output budget
+      EXPAND_SYS,
+      `Expand the intent of this input: "${correctedPrompt.slice(0, MAX_INPUT_CHARS)}"`,
+      EXPAND_TOKENS,
+      0.4   // slight creativity for inference, but structured
     )
     return safeJSON(raw)
   } catch (e) {
-    console.warn('[PET sense] failed:', e.message)
+    console.warn('[PET expand] failed:', e.message)
     return null
   }
 }
 
-// ── STEP 2: REWRITE -- generate 3 prompts ──────────────────────────────────
-export async function rewriteWithProvider(rawPrompt, classification, provider, apiKey, modelOverride) {
-  const model = modelOverride || getModel(provider, 'smart')
-  const truncated = rawPrompt.slice(0, MAX_INPUT_CHARS)
+// ── STEP 2: ARCHITECT -- generate 3 complete prompts ─────────────────────
+export async function architectPrompts(rawPrompt, expansion, provider, apiKey, modelOverride) {
+  const model       = modelOverride || getModel(provider, 'smart')
+  const temperature = expansion?.recommended_temperature || getDomainTemperature(expansion?.domain)
 
-  const techniqueStr = (classification?.techniques || []).slice(0, 3)
-    .map((t, i) => `T${i+1}: ${t.name} | Label: ${t.label} | Why: ${t.why}`)
-    .join('\n')
+  // Build the context block from expansion
+  const reqList = (expansion?.inferred_requirements || []).map((r, i) => `  ${i+1}. ${r}`).join('\n')
+  const stackStr = expansion?.tech_stack
+    ? Object.entries(expansion.tech_stack).map(([k, v]) => `  ${k}: ${v}`).join('\n')
+    : ''
 
   const userMsg = [
-    `User input: "${truncated}"`,
-    `Domain: ${classification?.domain || 'general'} / ${classification?.sub_domain || ''}`,
-    `Goal: ${classification?.goal || 'unclear'}`,
-    `Output format needed: ${classification?.output_format || 'explain'}`,
-    `Tone: ${classification?.tone || 'professional'}`,
-    `Expert persona: ${classification?.persona || 'World-class domain expert'}`,
-    `User context: ${classification?.user_context || 'unknown'}`,
-    techniqueStr ? `\nUse these 3 techniques (one per prompt):\n${techniqueStr}` : '',
-    `\nGenerate 3 completely different prompts. Each 80-180 words. Make them SPECIFIC to this exact input -- not templates.`,
+    `ORIGINAL INPUT: "${rawPrompt.slice(0, MAX_INPUT_CHARS)}"`,
+    `CORRECTED: "${expansion?.corrected || rawPrompt}"`,
+    `TRUE INTENT: ${expansion?.true_intent || 'unclear'}`,
+    `DOMAIN: ${expansion?.domain || 'general'} / ${expansion?.sub_domain || ''}`,
+    `USER LEVEL: ${expansion?.user_level || 'intermediate'}`,
+    `COMPLEXITY: ${expansion?.complexity || 'medium'}`,
+    `OUTPUT FORMAT: ${expansion?.output_format || 'how_to'}`,
+    `PERSONA: ${expansion?.persona || 'World-class domain expert'}`,
+    `TONE: ${expansion?.tone || 'professional'}`,
+    reqList ? `\nINFERRED REQUIREMENTS (cover ALL of these):\n${reqList}` : '',
+    stackStr ? `\nRECOMMENDED TECH STACK:\n${stackStr}` : '',
+    expansion?.hardest_part ? `\nHARDEST PART TO GET RIGHT: ${expansion.hardest_part}` : '',
+    expansion?.key_concepts?.length ? `\nKEY CONCEPTS TO INCLUDE: ${expansion.key_concepts.join(', ')}` : '',
+    `\nGenerate 3 complete, ready-to-use expert prompts. Cover the FULL inferred scope. Be specific. No placeholders.`,
   ].filter(Boolean).join('\n')
 
   try {
     const raw = await callWithRetry(
       provider, apiKey, model,
-      REWRITE_SYS,
+      ARCHITECT_SYS,
       userMsg,
-      MAX_REWRITE_TOKENS
+      ARCHITECT_TOKENS,
+      temperature
     )
     const data = safeJSON(raw)
     if (!data?.rewrites?.length) throw new Error('no rewrites in response')
 
-    // Merge technique metadata back
-    const techs = classification?.techniques || []
-    data.rewrites.forEach((r, i) => {
-      if (techs[i]) {
-        r.label     = r.label     || techs[i].label
-        r.technique = r.technique || techs[i].name
-        r.why       = r.why       || techs[i].why
-      }
-      r.domain     = classification?.domain     || 'general'
-      r.outputType = classification?.output_format || 'explain'
+    // Enrich each rewrite with metadata
+    data.rewrites.forEach(r => {
+      r.domain     = expansion?.domain     || 'general'
+      r.outputType = expansion?.output_format || 'how_to'
       r.source     = provider
       r.model      = model
+      r.temperature = temperature
     })
 
-    return { ok: true, rewrites: data.rewrites, goal: data.goal, classification }
+    return {
+      ok:             true,
+      rewrites:       data.rewrites,
+      goal:           data.true_intent || expansion?.true_intent || rawPrompt.slice(0, 80),
+      corrected:      data.corrected_prompt || expansion?.corrected || rawPrompt,
+      domain:         expansion?.domain || 'general',
+      expansion,
+    }
   } catch (e) {
-    console.error('[PET rewrite]', provider, e.message)
+    console.error('[PET architect]', provider, e.message)
     return { ok: false, error: e.message }
   }
 }
 
-// ── Main export: full sense + rewrite pipeline ─────────────────────────────
+// ── Main export: full intelligent pipeline ────────────────────────────────
+// correct → expand → architect
 export async function petRewrite(rawPrompt, provider, apiKey, modelOverride) {
   if (!rawPrompt?.trim()) return { ok: false, error: 'empty prompt' }
   if (!apiKey)             return { ok: false, error: 'no api key' }
 
-  // Step 1: classify (non-blocking for UX -- if it fails, proceed with null)
-  const classification = await sense(rawPrompt, provider, apiKey)
+  // Step 0: correct grammar/spelling (non-blocking -- if it fails use raw)
+  const corrected = await correctInput(rawPrompt, provider, apiKey)
 
-  // Step 2: rewrite using classification
-  return rewriteWithProvider(rawPrompt, classification, provider, apiKey, modelOverride)
+  // Step 1: expand intent (infer full scope -- if it fails, proceed with null)
+  const expansion = await expandIntent(corrected, provider, apiKey)
+
+  // Step 2: architect 3 complete prompts using full expansion
+  return architectPrompts(corrected, expansion, provider, apiKey, modelOverride)
 }
 
-// ── Evaluate: score a response against the original question ───────────────
-const EVAL_SYS = `Evaluate this AI response against the user's goal. Return ONLY valid JSON.
-Be domain-aware: a mental health response should score high on empathy+safety, not word count.
-A finance response needs specific numbers. A creative response needs originality.
+// ── Legacy export: sense() -- kept for backward compat ────────────────────
+// Returns expansion result shaped like the old sense() output
+export async function sense(rawPrompt, provider, apiKey) {
+  const corrected = await correctInput(rawPrompt, provider, apiKey)
+  return expandIntent(corrected, provider, apiKey)
+}
 
-{"score":<0-100>,"grade":"A|B|C|D|F","domain_score":<0-100 domain-appropriate quality>,"covered":["<specific thing well-addressed>"],"missing":["<specific gap>"],"quality_note":"<one sentence>","next_prompt":"<complete follow-up the user should send -- 60-120 words, references actual response content>","should_stop":<true if goal is substantially complete>}`
+// ── Evaluate: domain-aware response scorer with targeted follow-up ─────────
+const EVAL_SYS = `Evaluate this AI response against the user's goal. Return ONLY valid JSON.
+
+SCORING (domain-aware, not just word count):
+- code/tech: high score requires working code snippets, specific commands, no placeholder text, correct syntax
+- health/medical: high score requires evidence-based specifics, safety awareness, actionable protocols
+- finance: high score requires specific numbers, risk disclosure, real examples with actual % or $
+- creative: high score requires originality, vivid specific details, emotional resonance
+- emotional: high score requires validation-first, empathy, not rushing to solutions
+- education: high score requires clear analogy, worked example, builds from known to unknown
+
+next_prompt RULES (this is the most important field):
+1. Quote or directly reference SPECIFIC content from the response (actual words, tech names, numbers mentioned)
+2. Target the SINGLE most important gap or next depth level -- be surgical
+3. 60-120 words, immediately sendable as-is
+4. If response mentioned React -- follow-up must mention React specifically
+5. If response gave a framework -- ask to apply it with real numbers from the domain
+6. If response was vague -- name exactly what implementation detail is missing
+7. NEVER write "can you elaborate" -- always name the specific thing to elaborate on
+8. For code: ask for the specific function/component/hook that is missing
+9. For creative: ask for the specific scene/section that needs more depth
+
+{"score":<0-100>,"grade":"A|B|C|D|F","domain_score":<0-100>,"covered":["<specific strength>"],"missing":["<specific gap -- name it precisely>"],"quality_note":"<one sentence naming what was strongest or weakest>","next_prompt":"<complete ready-to-send follow-up citing actual response content>","should_stop":<true if goal substantially complete>}`
 
 export async function petEvaluate(question, response, provider, apiKey, modelOverride) {
   if (!question || !response) return null
-  const model = modelOverride || getModel(provider, 'fast')
+  const model       = modelOverride || getModel(provider, 'fast')
+  const temperature = 0.2   // evaluation needs precision, not creativity
 
-  const userMsg = `User goal: "${question.slice(0, 300)}"\n\nAI response:\n"""${response.slice(0, 1500)}"""\n\nEvaluate quality and write a specific follow-up prompt.`
+  // Extract tech names from response to inject into evaluation context
+  const techMentioned = (response.match(/\b(React|Vue|Next\.js|Angular|Svelte|Tailwind|Node|Express|FastAPI|Django|Python|TypeScript|Docker|Postgres|MongoDB|Redis|AWS|Vercel|Supabase|Firebase|MediaPipe|Framer Motion|GSAP|GraphQL|Prisma|JWT|OAuth)\b/g) || [])
+  const uniqueTech = [...new Set(techMentioned)].slice(0, 5).join(', ')
+
+  const userMsg = [
+    `User goal: "${question.slice(0, 300)}"`,
+    uniqueTech ? `Technologies mentioned in response: ${uniqueTech}` : '',
+    `\nAI response:\n"""${response.slice(0, 2000)}"""`,
+    `\nEvaluate quality. Write a specific follow-up that references the actual content above.`,
+  ].filter(Boolean).join('\n')
 
   try {
-    const raw = await callWithRetry(provider, apiKey, model, EVAL_SYS, userMsg, 400)
+    const raw = await callWithRetry(provider, apiKey, model, EVAL_SYS, userMsg, EVAL_TOKENS, temperature)
     const data = safeJSON(raw)
     if (!data?.score) return null
-    data.score      = Math.max(10, Math.min(99, data.score))
-    data.grade      = data.grade || (data.score >= 85 ? 'A' : data.score >= 70 ? 'B' : data.score >= 55 ? 'C' : data.score >= 40 ? 'D' : 'F')
-    data.grade_label = { A: 'Excellent ✦', B: 'Good ✓', C: 'Partial ~', D: 'Weak ✗', F: 'Off-target ✗' }[data.grade] || '~'
-    data.source = provider
+    data.score       = Math.max(10, Math.min(99, data.score))
+    data.grade       = data.grade || (data.score >= 85 ? 'A' : data.score >= 70 ? 'B' : data.score >= 55 ? 'C' : data.score >= 40 ? 'D' : 'F')
+    data.grade_label = { A: 'Excellent', B: 'Good', C: 'Partial', D: 'Weak', F: 'Off-target' }[data.grade] || '~'
+    data.source      = provider
     return data
   } catch (e) {
     console.warn('[PET evaluate]', provider, e.message)
